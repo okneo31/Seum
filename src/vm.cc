@@ -20,6 +20,7 @@ bool values_equal(const Value& a, const Value& b) {
     if (auto pa = as_bool(a))   { if (auto pb = as_bool(b))   return *pa == *pb; return false; }
     if (auto pa = as_int(a))    { if (auto pb = as_int(b))    return *pa == *pb; return false; }
     if (auto pa = as_string(a)) { if (auto pb = as_string(b)) return *pa == *pb; return false; }
+    // 함수값·레코드 등 합성/참조 타입은 동등성 미정의 — 항상 거짓 (결정 94).
     return false;
 }
 
@@ -267,6 +268,23 @@ struct Runner {
                         raise(pos, msg);
                     }
                     stack.push_back(*fv);
+                    pc += 5; break;
+                }
+                case Opcode::MEMBER_SET: {
+                    // v0.4a-2 #81: 스택 [record, value] → 레코드 필드 설정.
+                    std::uint32_t idx = read_u32_le(&chunk.bytes[pc + 1]);
+                    const std::u32string& field = chunk.str_pool[idx];
+                    if (stack.size() < 2) raise(pos, U"VM 내부 오류: 멤버 대입 스택 부족");
+                    Value rhs    = std::move(stack.back()); stack.pop_back();
+                    Value target = std::move(stack.back()); stack.pop_back();
+                    RecordValue* rec = as_record(target);
+                    if (!rec) raise(pos, U"멤버 대입은 레코드에만 가능합니다");
+                    Value* slot = rec->get(field);
+                    if (!slot) {
+                        std::u32string msg = U"레코드에 없는 멤버: "; msg += field;
+                        raise(pos, msg);
+                    }
+                    *slot = std::move(rhs);
                     pc += 5; break;
                 }
                 case Opcode::HALT:

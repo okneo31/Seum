@@ -99,6 +99,24 @@ private:
     Stmt parse_expr_stmt() {
         Position pos = peek().pos;
         Expr e = parse_expression();
+        // 필드 대입 — 결정 #81. `대상.필드 = 식.` / `대상.필드 += 식.`
+        if (peek().kind == TokenKind::Equals || peek().kind == TokenKind::PlusEq) {
+            std::u32string op = (peek().kind == TokenKind::PlusEq) ? U"+=" : U"=";
+            Position op_pos = peek().pos;
+            advance();  // = / +=
+            if (!is_member(e)) {
+                raise(op_pos,
+                      U"대입 대상은 레코드/계약 필드여야 합니다 (변수 재대입은 '변수'로)");
+            }
+            Expr value = parse_expression();
+            expect_period();
+            AssignStmt a;
+            a.target = std::move(e);
+            a.op     = std::move(op);
+            a.value  = std::move(value);
+            a.pos    = pos;
+            return Stmt{std::move(a)};
+        }
         expect_period();
         return ExprStmt{std::move(e), pos};
     }

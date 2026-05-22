@@ -210,6 +210,32 @@ struct Lowerer {
             fn.instrs.push_back(std::move(I));
             return;
         }
+        if (auto* asn = as_assign_stmt(s)) {
+            // v0.4a-2 #81: 필드 대입.
+            const MemberExpr* me = as_member(asn->target);
+            if (!me) raise(asn->pos, U"대입 대상은 레코드/계약 필드여야 합니다");
+            if (asn->op == U"+=") {
+                // 대상 1회 평가 후 DUP — MEMBER_GET·MEMBER_SET 가 공유.
+                Reg rec = lower_expr(me->target);
+                { Instr D; D.op = Op::DUP; D.pos = asn->pos; fn.instrs.push_back(std::move(D)); }
+                Reg cur = new_reg();
+                { Instr G; G.op = Op::MEMBER_GET; G.dst = cur; G.src = rec;
+                  G.str_val = me->field; G.pos = me->pos; fn.instrs.push_back(std::move(G)); }
+                Reg rhs = lower_expr(asn->value);
+                Reg sum = new_reg();
+                { Instr A; A.op = Op::ADD; A.dst = sum; A.src = cur; A.arg_srcs = {rhs};
+                  A.pos = asn->pos; fn.instrs.push_back(std::move(A)); }
+                { Instr S; S.op = Op::MEMBER_SET; S.src = sum;
+                  S.str_val = me->field; S.pos = asn->pos; fn.instrs.push_back(std::move(S)); }
+            } else {
+                lower_expr(me->target);             // push record
+                Reg rhs = lower_expr(asn->value);   // push value
+                Instr S; S.op = Op::MEMBER_SET; S.src = rhs;
+                S.str_val = me->field; S.pos = asn->pos;
+                fn.instrs.push_back(std::move(S));
+            }
+            return;
+        }
         if (auto* iff = as_if_stmt(s)) {
             lower_expr(iff->cond);
             Label jfz_idx = here();
@@ -326,6 +352,7 @@ const char32_t* op_name(Op op) {
         case Op::RET:          return U"돌려주기";
         case Op::MAKE_RECORD:  return U"레코드만들기";
         case Op::MEMBER_GET:   return U"멤버가져오기";
+        case Op::MEMBER_SET:   return U"멤버두기";
     }
     return U"???";
 }
@@ -441,6 +468,9 @@ std::u32string disassemble(const Function& fn) {
             case Op::MEMBER_GET:
                 out += reg_str(I.dst); out += U" = "; out += op_name(I.op);
                 out += U" "; out += quote(I.str_val); break;
+            case Op::MEMBER_SET:
+                out += op_name(I.op); out += U" "; out += quote(I.str_val);
+                out += U", "; out += reg_str(I.src); break;
         }
         out += U"\n";
     }

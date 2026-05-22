@@ -71,6 +71,7 @@ const MemberExpr* as_member(const Expr& e) {
 bool is_import_stmt   (const Stmt& s) { return std::holds_alternative<ImportStmt>(s); }
 bool is_var_decl_stmt (const Stmt& s) { return std::holds_alternative<VarDeclStmt>(s); }
 bool is_expr_stmt     (const Stmt& s) { return std::holds_alternative<ExprStmt>(s); }
+bool is_assign_stmt   (const Stmt& s) { return std::holds_alternative<AssignStmt>(s); }
 bool is_if_stmt       (const Stmt& s) { return std::holds_alternative<std::unique_ptr<IfStmt>>(s); }
 bool is_repeat_stmt   (const Stmt& s) { return std::holds_alternative<std::unique_ptr<RepeatStmt>>(s); }
 bool is_while_stmt    (const Stmt& s) { return std::holds_alternative<std::unique_ptr<WhileStmt>>(s); }
@@ -80,6 +81,7 @@ bool is_return_stmt   (const Stmt& s) { return std::holds_alternative<std::uniqu
 const ImportStmt*  as_import_stmt  (const Stmt& s) { return std::get_if<ImportStmt>(&s); }
 const VarDeclStmt* as_var_decl_stmt(const Stmt& s) { return std::get_if<VarDeclStmt>(&s); }
 const ExprStmt*    as_expr_stmt    (const Stmt& s) { return std::get_if<ExprStmt>(&s); }
+const AssignStmt*  as_assign_stmt  (const Stmt& s) { return std::get_if<AssignStmt>(&s); }
 const IfStmt*      as_if_stmt(const Stmt& s) {
     auto p = std::get_if<std::unique_ptr<IfStmt>>(&s);
     return p ? p->get() : nullptr;

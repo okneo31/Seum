@@ -32,6 +32,7 @@ const char* token_kind_name(TokenKind k) {
         case TokenKind::Slash:      return "/";
         case TokenKind::Percent:    return "%";
         case TokenKind::Arrow:      return "->";
+        case TokenKind::PlusEq:     return "+=";
         case TokenKind::EndOfFile:  return "파일끝";
     }
     return "?";

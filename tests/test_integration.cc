@@ -771,3 +771,147 @@ TEST_CASE("v0.4a-1 정리: 255-필드 레코드는 양 경로 모두 정상", "[
     REQUIRE(b.tree == b.vm_);
     REQUIRE(b.tree.find(U"0") != std::u32string::npos);
 }
+
+// === v0.4a-2: 필드 대입 + 복합대입 양 경로 의무 (#32, 결정 81·93) ===
+
+TEST_CASE("양경로 v0.4a-2: 복합대입 += 중첩 레코드", "[integration][both][v04a2]") {
+    auto b = run_both(
+        U"변수 용사 = (위치: (ㄱ: 10, ㅅ: 20)). 용사.위치.ㄱ += 10. 보여주기(용사.위치.ㄱ).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"20") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-2: 참조 의미론 — 별칭 변이 (결정 93)", "[integration][both][v04a2]") {
+    auto b = run_both(U"변수 가 = (ㄱ: 1). 변수 나 = 가. 나.ㄱ = 99. 보여주기(가.ㄱ).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"99") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-2: 원본 게임 예시 — 용사 이동", "[integration][both][v04a2]") {
+    // 프로그래밍예시.md 핵심 — 용사.위치.ㄱ += 10 (콜백 없이 직접 두 번)
+    auto b = run_both(
+        U"변수 용사 = (모양: \"용사\", 위치: (ㄱ: 10, ㅅ: 20)).\n"
+        U"용사.위치.ㄱ += 10.\n"
+        U"용사.위치.ㄱ += 10.\n"
+        U"보여주기(용사.위치.ㄱ).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"30") != std::u32string::npos);
+}
+
+TEST_CASE(".담음 빌드 경로: 필드 대입", "[integration][v04a2][acc-dameum]") {
+    auto out = run_via_dameum(U"변수 r = (값: 1). r.값 += 41. 보여주기(r.값).");
+    REQUIRE(out.find(U"42") != std::u32string::npos);
+}
+
+// === v0.4a-3: 함수 1급 — 함수값·변수 바인딩 (결정 62) ===
+// 함수는 CallableValue 로 환경에 등록되므로 기존 인프라로 1급 동작.
+
+TEST_CASE("양경로 v0.4a-3: 함수를 변수에 바인딩", "[integration][both][v04a3]") {
+    auto b = run_both(
+        U"함수 두배(수) -> 결과 { 돌려주기 수 * 2. }\n"
+        U"변수 f = 두배.\n"
+        U"보여주기(f(7)).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"14") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-3: 함수를 인자로 전달 (고차 함수)", "[integration][both][v04a3]") {
+    auto b = run_both(
+        U"함수 두배(수) -> 결과 { 돌려주기 수 * 2. }\n"
+        U"함수 적용(연산, 값) -> 결과 { 돌려주기 연산(값). }\n"
+        U"보여주기(적용(두배, 10)).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"20") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-3: 함수를 반환값으로", "[integration][both][v04a3]") {
+    auto b = run_both(
+        U"함수 두배(수) -> 결과 { 돌려주기 수 * 2. }\n"
+        U"함수 고르기() -> 결과 { 돌려주기 두배. }\n"
+        U"변수 g = 고르기().\n"
+        U"보여주기(g(9)).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"18") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-3: 함수값을 레코드 필드에 (함수 1급 x 레코드)", "[integration][both][v04a3]") {
+    auto b = run_both(
+        U"함수 두배(수) -> 결과 { 돌려주기 수 * 2. }\n"
+        U"변수 도구 = (연산: 두배).\n"
+        U"보여주기(도구.연산(6)).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"12") != std::u32string::npos);
+}
+
+TEST_CASE(".담음 빌드 경로: 함수 1급 바인딩", "[integration][v04a3][acc-dameum]") {
+    auto out = run_via_dameum(
+        U"함수 두배(수) -> 결과 { 돌려주기 수 * 2. } 변수 f = 두배. 보여주기(f(11)).");
+    REQUIRE(out.find(U"22") != std::u32string::npos);
+}
+
+// === v0.4a-3 추가 점검 — 함수 1급 엣지 케이스 10종 ===
+
+TEST_CASE("v0.4a-3 점검: 재귀 함수를 변수에 바인딩 후 호출", "[integration][both][v04a3]") {
+    auto b = run_both(
+        U"함수 팩토리얼(n) -> 결과 {\n"
+        U"  만약 (n <= 1) 이면 { 돌려주기 1. }\n"
+        U"  돌려주기 n * 팩토리얼(n - 1).\n"
+        U"}\n"
+        U"변수 계산 = 팩토리얼.\n"
+        U"보여주기(계산(5)).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"120") != std::u32string::npos);
+}
+
+TEST_CASE("v0.4a-3 점검: builtin 보여주기도 1급 값", "[integration][both][v04a3]") {
+    auto b = run_both(U"변수 출력 = 보여주기. 출력(\"일급보여주기\").");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"일급보여주기") != std::u32string::npos);
+}
+
+TEST_CASE("v0.4a-3 점검: 함수 합성 바깥(안쪽(값))", "[integration][both][v04a3]") {
+    auto b = run_both(
+        U"함수 더1(수) -> 결과 { 돌려주기 수 + 1. }\n"
+        U"함수 두배(수) -> 결과 { 돌려주기 수 * 2. }\n"
+        U"함수 합성(바깥, 안쪽, 값) -> 결과 { 돌려주기 바깥(안쪽(값)). }\n"
+        U"보여주기(합성(두배, 더1, 4)).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"10") != std::u32string::npos);   // 두배(더1(4)) = 두배(5)
+}
+
+TEST_CASE("v0.4a-3 점검: 같은 함수를 두 번 적용", "[integration][both][v04a3]") {
+    auto b = run_both(
+        U"함수 더1(수) -> 결과 { 돌려주기 수 + 1. }\n"
+        U"함수 두번(연산, 값) -> 결과 { 돌려주기 연산(연산(값)). }\n"
+        U"보여주기(두번(더1, 10)).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"12") != std::u32string::npos);
+}
+
+TEST_CASE("v0.4a-3 점검: 조건부 함수 선택 + 즉시 호출 (체이닝)", "[integration][both][v04a3]") {
+    auto b = run_both(
+        U"함수 두배(수) -> 결과 { 돌려주기 수 * 2. }\n"
+        U"함수 세배(수) -> 결과 { 돌려주기 수 * 3. }\n"
+        U"함수 고르기(짝) -> 결과 { 만약 (짝) 이면 { 돌려주기 두배. } 돌려주기 세배. }\n"
+        U"보여주기(고르기(참)(5)).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"10") != std::u32string::npos);
+}
+
+TEST_CASE("v0.4a-3 점검: 함수값 == 비교는 거짓 (동등성 미정의)", "[integration][both][v04a3]") {
+    auto b = run_both(
+        U"함수 두배(수) -> 결과 { 돌려주기 수 * 2. } 보여주기(두배 == 두배).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"거짓") != std::u32string::npos);
+}
+
+TEST_CASE("v0.4a-3 점검: 레코드에 함수 2개 담아 각각 호출", "[integration][both][v04a3]") {
+    auto b = run_both(
+        U"함수 두배(수) -> 결과 { 돌려주기 수 * 2. }\n"
+        U"함수 세배(수) -> 결과 { 돌려주기 수 * 3. }\n"
+        U"변수 도구 = (곱2: 두배, 곱3: 세배).\n"
+        U"보여주기(도구.곱2(5)). 보여주기(도구.곱3(5)).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"10") != std::u32string::npos);
+    REQUIRE(b.tree.find(U"15") != std::u32string::npos);
+}

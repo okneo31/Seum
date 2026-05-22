@@ -365,3 +365,69 @@ TEST_CASE("해석기 v0.4a-1: 함수가 반환한 레코드에 멤버 접근", "
         U"보여주기(점만들기().ㄱ).", env);
     REQUIRE(cap.buffer.find(U"3") != std::u32string::npos);
 }
+
+// === v0.4a-2: 필드 대입 + 복합대입 (결정 81·93) ===
+
+TEST_CASE("해석기 v0.4a-2: 필드 대입 =", "[interpreter][v04a2]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    run(U"변수 용사 = (위치: (ㄱ: 10, ㅅ: 20)). 용사.위치.ㄱ = 0. 보여주기(용사.위치.ㄱ).", env);
+    REQUIRE(cap.buffer.find(U"0") != std::u32string::npos);
+}
+
+TEST_CASE("해석기 v0.4a-2: 복합대입 +=", "[interpreter][v04a2]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    run(U"변수 용사 = (위치: (ㄱ: 10, ㅅ: 20)). 용사.위치.ㄱ += 10. 보여주기(용사.위치.ㄱ).", env);
+    REQUIRE(cap.buffer.find(U"20") != std::u32string::npos);
+}
+
+TEST_CASE("해석기 v0.4a-2: 참조 의미론 — 별칭에 변이 반영 (결정 93)", "[interpreter][v04a2]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    run(U"변수 가 = (ㄱ: 1). 변수 나 = 가. 나.ㄱ = 99. 보여주기(가.ㄱ).", env);
+    REQUIRE(cap.buffer.find(U"99") != std::u32string::npos);
+}
+
+TEST_CASE("해석기 v0.4a-2: 문자열 필드 += 결합", "[interpreter][v04a2]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    run(U"변수 r = (말: \"안녕\"). r.말 += \" 세움\". 보여주기(r.말).", env);
+    REQUIRE(cap.buffer.find(U"안녕 세움") != std::u32string::npos);
+}
+
+TEST_CASE("해석기 v0.4a-2: 없는 멤버 대입은 한국어 에러", "[interpreter][v04a2]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    REQUIRE_THROWS_AS(run(U"변수 r = (ㄱ: 1). r.ㅎ = 5.", env), SeumError);
+}
+
+// === v0.4a-3: 함수 1급 (결정 62) ===
+
+TEST_CASE("해석기 v0.4a-3: 함수값 출력 형태", "[interpreter][v04a3]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    run(U"함수 두배(수) -> 결과 { 돌려주기 수 * 2. } 보여주기(두배).", env);
+    REQUIRE(cap.buffer.find(U"함수") != std::u32string::npos);
+    REQUIRE(cap.buffer.find(U"두배") != std::u32string::npos);
+}
+
+TEST_CASE("해석기 v0.4a-3 점검: 함수 변수 재바인딩", "[interpreter][v04a3]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    run(U"함수 두배(수) -> 결과 { 돌려주기 수 * 2. }\n"
+        U"함수 세배(수) -> 결과 { 돌려주기 수 * 3. }\n"
+        U"변수 f = 두배. 변수 f = 세배.\n"
+        U"보여주기(f(4)).", env);
+    REQUIRE(cap.buffer.find(U"12") != std::u32string::npos);   // 세배(4)
+}
+
+TEST_CASE("해석기 v0.4a-3 점검: 함수를 두 계층에 걸쳐 전달", "[interpreter][v04a3]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    run(U"함수 두배(수) -> 결과 { 돌려주기 수 * 2. }\n"
+        U"함수 전달(연산, 값) -> 결과 { 돌려주기 연산(값). }\n"
+        U"함수 중계(연산, 값) -> 결과 { 돌려주기 전달(연산, 값). }\n"
+        U"보여주기(중계(두배, 21)).", env);
+    REQUIRE(cap.buffer.find(U"42") != std::u32string::npos);
+}

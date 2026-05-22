@@ -48,6 +48,7 @@ const Row TABLE[] = {
     { Opcode::MOD,          U"나머지",       0 },
     { Opcode::MAKE_RECORD,  U"레코드만들기", 1 },
     { Opcode::MEMBER_GET,   U"멤버가져오기", 4 },
+    { Opcode::MEMBER_SET,   U"멤버두기",     4 },
     { Opcode::HALT,         U"종료",         0 },
 };
 
@@ -222,6 +223,10 @@ struct ChunkCompiler {
                 emit_op(Opcode::MEMBER_GET, I.pos);
                 emit_u32(intern_str(I.str_val));
                 break;
+            case O::MEMBER_SET:
+                emit_op(Opcode::MEMBER_SET, I.pos);
+                emit_u32(intern_str(I.str_val));
+                break;
         }
     }
 };
@@ -277,7 +282,8 @@ std::u32string disassemble(const Chunk& chunk) {
                 case Opcode::IMPORT:       out += quote_string(chunk.name_pool[arg]); break;
                 case Opcode::JMP:
                 case Opcode::JFZ:          out += U"-> "; out += hex4(arg); break;
-                case Opcode::MEMBER_GET:   out += quote_string(chunk.str_pool[arg]); break;
+                case Opcode::MEMBER_GET:
+                case Opcode::MEMBER_SET:   out += quote_string(chunk.str_pool[arg]); break;
                 default:                   out += int_to_u32(static_cast<std::int64_t>(arg)); break;
             }
         } else if (row->operand_bytes == 1) {

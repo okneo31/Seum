@@ -36,6 +36,7 @@ enum class TokenKind {
     Percent,      // %
     // v0.2e (#30).
     Arrow,        // ->
+    PlusEq,       // += (v0.4a-2 #81) — 복합대입
     EndOfFile,
 };
 

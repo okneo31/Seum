@@ -110,6 +110,7 @@ private:
         if (c == U'&' && peek(1) == U'&') { advance(); advance(); return {TokenKind::AmpAmp,   U"&&", start}; }
         if (c == U'|' && peek(1) == U'|') { advance(); advance(); return {TokenKind::PipePipe, U"||", start}; }
         if (c == U'-' && peek(1) == U'>') { advance(); advance(); return {TokenKind::Arrow,    U"->", start}; }
+        if (c == U'+' && peek(1) == U'=') { advance(); advance(); return {TokenKind::PlusEq,   U"+=", start}; }
 
         // 멤버 접근 '.' vs 문장 종결자 '.' — 결정 79.
         // 멤버 접근: 양쪽이 공백 없이 인접 (`용사.위치`). 종결자: 앞에 공백이 있거나

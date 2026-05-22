@@ -116,11 +116,21 @@ struct ExprStmt {
     Position pos;
 };
 
+// 필드 대입 `대상.필드 = 식.` / `대상.필드 += 식.` — 결정 #81.
+// target 은 MemberExpr (레코드·계약 필드). op = U"=" 또는 U"+=".
+struct AssignStmt {
+    Expr           target;
+    std::u32string op;
+    Expr           value;
+    Position       pos;
+};
+
 // IfStmt/Repeat/While 는 vector<Stmt> 를 들기 때문에 Stmt variant 에서 unique_ptr 로 보관.
 using Stmt = std::variant<
     ImportStmt,
     VarDeclStmt,
     ExprStmt,
+    AssignStmt,
     std::unique_ptr<IfStmt>,
     std::unique_ptr<RepeatStmt>,
     std::unique_ptr<WhileStmt>,
@@ -200,6 +210,7 @@ const MemberExpr*     as_member    (const Expr& e);
 bool is_import_stmt   (const Stmt& s);
 bool is_var_decl_stmt (const Stmt& s);
 bool is_expr_stmt     (const Stmt& s);
+bool is_assign_stmt   (const Stmt& s);
 bool is_if_stmt       (const Stmt& s);
 bool is_repeat_stmt   (const Stmt& s);
 bool is_while_stmt    (const Stmt& s);
@@ -209,6 +220,7 @@ bool is_return_stmt   (const Stmt& s);
 const ImportStmt*    as_import_stmt   (const Stmt& s);
 const VarDeclStmt*   as_var_decl_stmt (const Stmt& s);
 const ExprStmt*      as_expr_stmt     (const Stmt& s);
+const AssignStmt*    as_assign_stmt   (const Stmt& s);
 const IfStmt*        as_if_stmt       (const Stmt& s);
 const RepeatStmt*    as_repeat_stmt   (const Stmt& s);
 const WhileStmt*     as_while_stmt    (const Stmt& s);

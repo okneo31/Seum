@@ -185,3 +185,55 @@ TEST_CASE("VM v0.4a-1: 비-레코드 멤버 접근은 한국어 에러", "[vm][v
     modules::register_builtin(env);
     REQUIRE_THROWS_AS(compile_and_run(U"변수 x = 5. 보여주기(x.ㄱ).", env), SeumError);
 }
+
+// === v0.4a-2: 필드 대입 + 복합대입 — VM 경로 (결정 81·93) ===
+
+TEST_CASE("VM v0.4a-2: 복합대입 +=", "[vm][v04a2]") {
+    std::u32string captured;
+    auto sink = [&captured](const std::u32string& s) { captured += s; };
+    Environment env;
+    modules::register_builtin(env, sink);
+    compile_and_run(
+        U"변수 용사 = (위치: (ㄱ: 10, ㅅ: 20)). 용사.위치.ㄱ += 10. 보여주기(용사.위치.ㄱ).", env);
+    REQUIRE(captured.find(U"20") != std::u32string::npos);
+}
+
+TEST_CASE("VM v0.4a-2: 참조 의미론 별칭 변이 (결정 93)", "[vm][v04a2]") {
+    std::u32string captured;
+    auto sink = [&captured](const std::u32string& s) { captured += s; };
+    Environment env;
+    modules::register_builtin(env, sink);
+    compile_and_run(U"변수 가 = (ㄱ: 1). 변수 나 = 가. 나.ㄱ = 99. 보여주기(가.ㄱ).", env);
+    REQUIRE(captured.find(U"99") != std::u32string::npos);
+}
+
+TEST_CASE("VM v0.4a-2: 없는 멤버 대입은 한국어 에러", "[vm][v04a2]") {
+    Environment env;
+    modules::register_builtin(env);
+    REQUIRE_THROWS_AS(compile_and_run(U"변수 r = (ㄱ: 1). r.ㅎ = 5.", env), SeumError);
+}
+
+// === v0.4a-3: 함수 1급 — VM 경로 (결정 62) ===
+
+TEST_CASE("VM v0.4a-3: 함수 1급 변수 바인딩", "[vm][v04a3]") {
+    std::u32string captured;
+    auto sink = [&captured](const std::u32string& s) { captured += s; };
+    Environment env;
+    modules::register_builtin(env, sink);
+    compile_and_run(
+        U"함수 세배(수) -> 결과 { 돌려주기 수 * 3. } 변수 f = 세배. 보여주기(f(4)).", env);
+    REQUIRE(captured.find(U"12") != std::u32string::npos);
+}
+
+TEST_CASE("VM v0.4a-3 점검: 레코드에 담은 함수를 인자로 전달", "[vm][v04a3]") {
+    std::u32string captured;
+    auto sink = [&captured](const std::u32string& s) { captured += s; };
+    Environment env;
+    modules::register_builtin(env, sink);
+    compile_and_run(
+        U"함수 두배(수) -> 결과 { 돌려주기 수 * 2. }\n"
+        U"함수 꺼내실행(상자, 값) -> 결과 { 돌려주기 상자.연산(값). }\n"
+        U"변수 상자 = (연산: 두배).\n"
+        U"보여주기(꺼내실행(상자, 9)).", env);
+    REQUIRE(captured.find(U"18") != std::u32string::npos);
+}

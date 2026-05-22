@@ -99,3 +99,24 @@ TEST_CASE("파서 v0.4a-1: 괄호식은 레코드가 아님", "[parser][v04a]") 
 TEST_CASE("파서 v0.4a-1: 레코드 중복 키는 오류 (점검 정리)", "[parser][v04a]") {
     REQUIRE_THROWS(parse_source(U"변수 r = (ㄱ: 1, ㄱ: 2)."));
 }
+
+// === v0.4a-2: 필드 대입 + 복합대입 (결정 81) ===
+
+TEST_CASE("파서 v0.4a-2: 필드 대입 = / +=", "[parser][v04a2]") {
+    Program p1 = parse_source(U"용사.위치.ㄱ = 0.");
+    REQUIRE(is_assign_stmt(p1.statements[0]));
+    auto* a1 = as_assign_stmt(p1.statements[0]);
+    REQUIRE(a1 != nullptr);
+    REQUIRE(a1->op == U"=");
+    REQUIRE(is_member(a1->target));
+
+    Program p2 = parse_source(U"용사.위치.ㄱ += 10.");
+    auto* a2 = as_assign_stmt(p2.statements[0]);
+    REQUIRE(a2 != nullptr);
+    REQUIRE(a2->op == U"+=");
+    REQUIRE(is_member(a2->target));
+}
+
+TEST_CASE("파서 v0.4a-2: 변수 재대입은 오류 (필드만 허용)", "[parser][v04a2]") {
+    REQUIRE_THROWS(parse_source(U"x = 5."));
+}

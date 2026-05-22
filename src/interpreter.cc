@@ -39,7 +39,22 @@ bool values_equal(const Value& a, const Value& b) {
     if (auto pa = as_bool(a))   { if (auto pb = as_bool(b))   return *pa == *pb; return false; }
     if (auto pa = as_int(a))    { if (auto pb = as_int(b))    return *pa == *pb; return false; }
     if (auto pa = as_string(a)) { if (auto pb = as_string(b)) return *pa == *pb; return false; }
+    // 함수값·레코드 등 합성/참조 타입은 동등성 미정의 — 항상 거짓 (결정 94).
     return false;
+}
+
+// v0.2c: `+` 다형 — string+string 결합, int+int 산술합. 혼합은 타입 에러 (#31).
+// v0.4a-2: 필드 복합대입 `+=` 도 이 의미를 공유.
+Value add_values(const Value& l, const Value& r, Position pos) {
+    if (auto ls = as_string(l)) {
+        auto rs = as_string(r);
+        if (!rs) raise(pos, U"+ 양변이 모두 문자열이어야 결합됩니다");
+        return make_string(*ls + *rs);
+    }
+    auto li = as_int(l);
+    auto ri = as_int(r);
+    if (!li || !ri) raise(pos, U"+ 는 정수 또는 문자열에만 적용 가능합니다");
+    return make_int(*li + *ri);
 }
 
 Value eval_binary(const BinaryExpr& B, Environment& env) {
@@ -66,18 +81,8 @@ Value eval_binary(const BinaryExpr& B, Environment& env) {
     if (op == U"==") return make_bool( values_equal(l, r));
     if (op == U"!=") return make_bool(!values_equal(l, r));
 
-    // v0.2c: `+` 다형 — string+string 결합, int+int 산술합. 혼합은 타입 에러 (#31).
-    if (op == U"+") {
-        if (auto ls = as_string(l)) {
-            auto rs = as_string(r);
-            if (!rs) raise(B.pos, U"+ 양변이 모두 문자열이어야 결합됩니다");
-            return make_string(*ls + *rs);
-        }
-        auto li = as_int(l);
-        auto ri = as_int(r);
-        if (!li || !ri) raise(B.pos, U"+ 는 정수 또는 문자열에만 적용 가능합니다");
-        return make_int(*li + *ri);
-    }
+    // v0.2c: `+` 다형 — add_values 로 추출 (v0.4a-2 `+=` 와 공유).
+    if (op == U"+") return add_values(l, r, B.pos);
 
     // 그 외 산술/비교 — int 전용
     auto* li = as_int(l);
@@ -187,6 +192,26 @@ void eval_stmt(const Stmt& s, Environment& env) {
     }
     if (auto* es = as_expr_stmt(s)) {
         eval_expr(es->expr, env);
+        return;
+    }
+    if (auto* asn = as_assign_stmt(s)) {
+        // v0.4a-2 #81: 필드 대입. target 은 MemberExpr (parser 가 보장).
+        const MemberExpr* me = as_member(asn->target);
+        if (!me) raise(asn->pos, U"대입 대상은 레코드/계약 필드여야 합니다");
+        Value parent = eval_expr(me->target, env);
+        RecordValue* rec = as_record(parent);
+        if (!rec) raise(me->pos, U"멤버 대입은 레코드에만 가능합니다");
+        Value rhs = eval_expr(asn->value, env);   // slot 잡기 전에 rhs 먼저 평가
+        Value* slot = rec->get(me->field);
+        if (!slot) {
+            std::u32string msg = U"레코드에 없는 멤버: "; msg += me->field;
+            raise(me->pos, msg);
+        }
+        if (asn->op == U"+=") {
+            *slot = add_values(*slot, rhs, asn->pos);
+        } else {
+            *slot = std::move(rhs);
+        }
         return;
     }
     if (auto* iff = as_if_stmt(s)) {
