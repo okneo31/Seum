@@ -10,12 +10,16 @@ Value make_bool(bool b) { return Value{b}; }
 Value make_int(std::int64_t v) { return Value{v}; }
 Value make_string(std::u32string s) { return Value{std::move(s)}; }
 Value make_time(std::int64_t sst_seconds) { return Value{TimeValue{sst_seconds}}; }
+Value make_asset(std::u32string currency, std::int64_t amount) {
+    return Value{AssetValue{std::move(currency), amount}};
+}
 
 bool is_none(const Value& v)     { return std::holds_alternative<std::monostate>(v); }
 bool is_bool(const Value& v)     { return std::holds_alternative<bool>(v); }
 bool is_int(const Value& v)      { return std::holds_alternative<std::int64_t>(v); }
 bool is_string(const Value& v)   { return std::holds_alternative<std::u32string>(v); }
 bool is_time(const Value& v)     { return std::holds_alternative<TimeValue>(v); }
+bool is_asset(const Value& v)    { return std::holds_alternative<AssetValue>(v); }
 bool is_callable(const Value& v) { return std::holds_alternative<std::shared_ptr<CallableValue>>(v); }
 bool is_getter(const Value& v)   { return std::holds_alternative<std::shared_ptr<GetterValue>>(v); }
 bool is_record(const Value& v)   { return std::holds_alternative<std::shared_ptr<RecordValue>>(v); }
@@ -24,6 +28,7 @@ const bool*          as_bool(const Value& v)   { return std::get_if<bool>(&v); }
 const std::int64_t*  as_int(const Value& v)    { return std::get_if<std::int64_t>(&v); }
 const std::u32string* as_string(const Value& v) { return std::get_if<std::u32string>(&v); }
 const TimeValue*     as_time(const Value& v)   { return std::get_if<TimeValue>(&v); }
+const AssetValue*    as_asset(const Value& v)  { return std::get_if<AssetValue>(&v); }
 
 const CallableValue* as_callable(const Value& v) {
     auto p = std::get_if<std::shared_ptr<CallableValue>>(&v);
@@ -162,6 +167,8 @@ std::u32string render_value(const Value& v) {
             return x;
         } else if constexpr (std::is_same_v<T, TimeValue>) {
             return format_sst(x.sst_seconds);
+        } else if constexpr (std::is_same_v<T, AssetValue>) {
+            return x.currency + U"(" + to_u32(x.amount) + U")";
         } else if constexpr (std::is_same_v<T, std::shared_ptr<CallableValue>>) {
             return U"<함수 " + x->name + U">";
         } else if constexpr (std::is_same_v<T, std::shared_ptr<GetterValue>>) {

@@ -29,6 +29,7 @@ set(SEUM_SOURCES
     src/modules/builtin.cc
     src/modules/time.cc
     src/modules/native_bridge.cc
+    src/modules/finance.cc
 )
 
 add_library(seum_core STATIC ${SEUM_SOURCES})

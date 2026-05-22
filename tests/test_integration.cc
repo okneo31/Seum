@@ -9,6 +9,7 @@
 #include "jamo_huffman.h"
 #include "lexer.h"
 #include "modules/builtin.h"
+#include "modules/finance.h"
 #include "modules/native_bridge.h"
 #include "modules/time.h"
 #include "parser.h"
@@ -44,6 +45,7 @@ static Both run_both(std::u32string_view src) {
         Environment env;
         modules::register_builtin(env, sink);
         modules::register_time(env);
+        modules::register_finance(env);
         auto prog = parse(tokenize(src));
         evaluate(prog, env);
     }
@@ -52,6 +54,7 @@ static Both run_both(std::u32string_view src) {
         Environment env;
         modules::register_builtin(env, sink);
         modules::register_time(env);
+        modules::register_finance(env);
         auto prog    = parse(tokenize(src));
         auto ir_prog = ir::lower(prog);
         auto bc_prog = bytecode::compile(ir_prog);
@@ -574,6 +577,7 @@ std::u32string run_via_dameum(std::u32string_view src) {
     modules::register_builtin(env, [&captured](const std::u32string& s) { captured += s; });
     modules::register_time(env);
     modules::register_natives(env);
+    modules::register_finance(env);
     vm::run(prog, env);
     return captured;
 }
@@ -961,4 +965,25 @@ TEST_CASE(".담음 빌드 경로: 계약 선언형 블록", "[integration][v04a4
     auto out = run_via_dameum(
         U"계약 창고 { 함수 개수() -> 결과 { 돌려주기 7. } } 보여주기(창고.개수()).");
     REQUIRE(out.find(U"7") != std::u32string::npos);
+}
+
+// === v0.4a-5: 자산 타입 + 금융 그릇 양 경로 의무 (#32, 결정 64) ===
+
+TEST_CASE("양경로 v0.4a-5: 자산 += 누적", "[integration][both][v04a5]") {
+    auto b = run_both(
+        U"가져오기(금융). 변수 지갑 = (돈: BTC(100)). 지갑.돈 += BTC(50). 보여주기(지갑.돈).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"BTC(150)") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-5: KRW 자산 출력 동일", "[integration][both][v04a5]") {
+    auto b = run_both(U"가져오기(금융). 보여주기(KRW(5000)).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"KRW(5000)") != std::u32string::npos);
+}
+
+TEST_CASE(".담음 빌드 경로: 자산 생성·누적", "[integration][v04a5][acc-dameum]") {
+    auto out = run_via_dameum(
+        U"가져오기(금융). 변수 w = (돈: BTC(7)). w.돈 += BTC(3). 보여주기(w.돈).");
+    REQUIRE(out.find(U"BTC(10)") != std::u32string::npos);
 }

@@ -10,6 +10,7 @@
 #include "utf8.h"
 #include "vm.h"
 #include "modules/builtin.h"
+#include "modules/finance.h"
 #include "modules/native_bridge.h"
 #include "modules/time.h"
 
@@ -195,6 +196,7 @@ int run_file(const std::string& path, ExecMode mode) {
     modules::register_builtin(env);
     modules::register_time(env);
     modules::register_natives(env);
+    modules::register_finance(env);   // v0.4a-5
     install_dameum_resolver(env, g_exe_path);
 
     try {

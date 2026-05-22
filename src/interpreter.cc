@@ -51,6 +51,17 @@ Value add_values(const Value& l, const Value& r, Position pos) {
         if (!rs) raise(pos, U"+ 양변이 모두 문자열이어야 결합됩니다");
         return make_string(*ls + *rs);
     }
+    // v0.4a-5 #64: 자산 + 자산 — 같은 통화끼리만, 결과 음수 금지.
+    if (auto la = as_asset(l)) {
+        auto ra = as_asset(r);
+        if (!ra) raise(pos, U"자산과 자산만 더할 수 있습니다");
+        if (la->currency != ra->currency) {
+            raise(pos, U"통화가 다른 자산은 더할 수 없습니다");
+        }
+        std::int64_t sum = la->amount + ra->amount;
+        if (sum < 0) raise(pos, U"자산은 음수가 될 수 없습니다");
+        return make_asset(la->currency, sum);
+    }
     auto li = as_int(l);
     auto ri = as_int(r);
     if (!li || !ri) raise(pos, U"+ 는 정수 또는 문자열에만 적용 가능합니다");

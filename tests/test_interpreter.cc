@@ -5,6 +5,7 @@
 #include "interpreter.h"
 #include "lexer.h"
 #include "modules/builtin.h"
+#include "modules/finance.h"
 #include "modules/native_bridge.h"
 #include "modules/time.h"
 #include "parser.h"
@@ -28,6 +29,7 @@ Environment make_env(modules::OutputSink sink) {
     modules::register_builtin(env, sink);
     modules::register_time(env);
     modules::register_natives(env, std::move(sink));   // v0.3e
+    modules::register_finance(env);                    // v0.4a-5
     return env;
 }
 
@@ -430,4 +432,39 @@ TEST_CASE("해석기 v0.4a-3 점검: 함수를 두 계층에 걸쳐 전달", "[i
         U"함수 중계(연산, 값) -> 결과 { 돌려주기 전달(연산, 값). }\n"
         U"보여주기(중계(두배, 21)).", env);
     REQUIRE(cap.buffer.find(U"42") != std::u32string::npos);
+}
+
+// === v0.4a-5: 자산 타입 + 금융 그릇 (결정 64) ===
+
+TEST_CASE("해석기 v0.4a-5: BTC 자산 생성·출력", "[interpreter][v04a5]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    run(U"가져오기(금융). 보여주기(BTC(50000)).", env);
+    REQUIRE(cap.buffer.find(U"BTC(50000)") != std::u32string::npos);
+}
+
+TEST_CASE("해석기 v0.4a-5: 자산 += 누적 (레코드 필드)", "[interpreter][v04a5]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    run(U"가져오기(금융). 변수 지갑 = (돈: BTC(100)). 지갑.돈 += BTC(50). 보여주기(지갑.돈).", env);
+    REQUIRE(cap.buffer.find(U"BTC(150)") != std::u32string::npos);
+}
+
+TEST_CASE("해석기 v0.4a-5: 음수 자산은 한국어 에러 (결정 64)", "[interpreter][v04a5]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    REQUIRE_THROWS_AS(run(U"가져오기(금융). 보여주기(BTC(-5)).", env), SeumError);
+}
+
+TEST_CASE("해석기 v0.4a-5: 통화 다른 자산 더하면 에러", "[interpreter][v04a5]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    REQUIRE_THROWS_AS(
+        run(U"가져오기(금융). 변수 w = (돈: BTC(1)). w.돈 += KRW(1).", env), SeumError);
+}
+
+TEST_CASE("해석기 v0.4a-5: 가져오기(금융) 없이 BTC 사용은 에러", "[interpreter][v04a5]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    REQUIRE_THROWS_AS(run(U"보여주기(BTC(1)).", env), SeumError);
 }

@@ -6,6 +6,7 @@
 #include "ir.h"
 #include "lexer.h"
 #include "modules/builtin.h"
+#include "modules/finance.h"
 #include "modules/time.h"
 #include "parser.h"
 #include "vm.h"
@@ -236,4 +237,36 @@ TEST_CASE("VM v0.4a-3 점검: 레코드에 담은 함수를 인자로 전달", "
         U"변수 상자 = (연산: 두배).\n"
         U"보여주기(꺼내실행(상자, 9)).", env);
     REQUIRE(captured.find(U"18") != std::u32string::npos);
+}
+
+// === v0.4a-5: 자산 타입 — VM 경로 (결정 64) ===
+
+TEST_CASE("VM v0.4a-5: KRW 자산 생성·출력", "[vm][v04a5]") {
+    std::u32string captured;
+    auto sink = [&captured](const std::u32string& s) { captured += s; };
+    Environment env;
+    modules::register_builtin(env, sink);
+    modules::register_finance(env);
+    compile_and_run(U"가져오기(금융). 보여주기(KRW(1000)).", env);
+    REQUIRE(captured.find(U"KRW(1000)") != std::u32string::npos);
+}
+
+TEST_CASE("VM v0.4a-5: 자산 += 누적", "[vm][v04a5]") {
+    std::u32string captured;
+    auto sink = [&captured](const std::u32string& s) { captured += s; };
+    Environment env;
+    modules::register_builtin(env, sink);
+    modules::register_finance(env);
+    compile_and_run(
+        U"가져오기(금융). 변수 w = (돈: BTC(10)). w.돈 += BTC(5). 보여주기(w.돈).", env);
+    REQUIRE(captured.find(U"BTC(15)") != std::u32string::npos);
+}
+
+TEST_CASE("VM v0.4a-5: 통화 불일치는 한국어 에러", "[vm][v04a5]") {
+    Environment env;
+    modules::register_builtin(env);
+    modules::register_finance(env);
+    REQUIRE_THROWS_AS(
+        compile_and_run(U"가져오기(금융). 변수 w = (돈: BTC(1)). w.돈 += KRW(2).", env),
+        SeumError);
 }

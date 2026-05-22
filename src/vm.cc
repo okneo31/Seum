@@ -168,6 +168,16 @@ struct Runner {
                         auto bs = as_string(b);
                         if (!bs) raise(pos, U"+ 양변이 모두 문자열이어야 결합됩니다");
                         stack.push_back(make_string(*as_ + *bs));
+                    } else if (auto aa = as_asset(a)) {
+                        // v0.4a-5 #64: 자산 + 자산 — 같은 통화, 결과 음수 금지.
+                        auto ba = as_asset(b);
+                        if (!ba) raise(pos, U"자산과 자산만 더할 수 있습니다");
+                        if (aa->currency != ba->currency) {
+                            raise(pos, U"통화가 다른 자산은 더할 수 없습니다");
+                        }
+                        std::int64_t sum = aa->amount + ba->amount;
+                        if (sum < 0) raise(pos, U"자산은 음수가 될 수 없습니다");
+                        stack.push_back(make_asset(aa->currency, sum));
                     } else {
                         auto ai = as_int(a); auto bi = as_int(b);
                         if (!ai || !bi) raise(pos, U"+ 는 정수 또는 문자열에만 적용 가능합니다");
