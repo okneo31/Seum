@@ -1,0 +1,12 @@
+# 빌드 산출물
+build/
+
+# 컴파일된 담음 산출물 (.세움 소스에서 재생성 가능)
+examples/*.담음
+*.tmp
+
+# 에디터/OS
+.vs/
+*.user
+Thumbs.db
+desktop.ini
