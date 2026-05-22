@@ -120,3 +120,26 @@ TEST_CASE("파서 v0.4a-2: 필드 대입 = / +=", "[parser][v04a2]") {
 TEST_CASE("파서 v0.4a-2: 변수 재대입은 오류 (필드만 허용)", "[parser][v04a2]") {
     REQUIRE_THROWS(parse_source(U"x = 5."));
 }
+
+// === v0.4a-4: 계약 선언형 블록 (결정 63·87·90) ===
+
+TEST_CASE("파서 v0.4a-4: 계약 블록 → 함수+레코드 desugar", "[parser][v04a4]") {
+    // 계약 = 메서드(전역 함수) + 변수(레코드) 로 desugar
+    Program p = parse_source(
+        U"계약 은행 { 주인: \"철수\" 함수 인사() -> 결과 { 돌려주기 \"환영\". } }");
+    REQUIRE(p.statements.size() == 2);
+    REQUIRE(is_func_decl(p.statements[0]));
+    REQUIRE(as_func_decl(p.statements[0])->name == U"인사");
+    REQUIRE(is_var_decl_stmt(p.statements[1]));
+    auto* vd = as_var_decl_stmt(p.statements[1]);
+    REQUIRE(vd->name == U"은행");
+    REQUIRE(is_record_lit(vd->value));
+}
+
+TEST_CASE("파서 v0.4a-4: 계약 중복 항목은 오류", "[parser][v04a4]") {
+    REQUIRE_THROWS(parse_source(U"계약 X { 가: 1 가: 2 }"));
+}
+
+TEST_CASE("파서 v0.4a-4: 계약의 자산은 아직 미지원 오류", "[parser][v04a4]") {
+    REQUIRE_THROWS(parse_source(U"계약 X { 자산 금고: BTC }"));
+}

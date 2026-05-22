@@ -915,3 +915,50 @@ TEST_CASE("v0.4a-3 점검: 레코드에 함수 2개 담아 각각 호출", "[int
     REQUIRE(b.tree.find(U"10") != std::u32string::npos);
     REQUIRE(b.tree.find(U"15") != std::u32string::npos);
 }
+
+// === v0.4a-4: 계약 선언형 블록 양 경로 의무 (#32, 결정 63·87·90) ===
+
+TEST_CASE("양경로 v0.4a-4: 계약 필드 접근", "[integration][both][v04a4]") {
+    auto b = run_both(
+        U"계약 은행 { 주인: \"철수\" 잔액: 100 }\n"
+        U"보여주기(은행.주인). 보여주기(은행.잔액).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"철수") != std::u32string::npos);
+    REQUIRE(b.tree.find(U"100") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-4: 계약 메서드 호출", "[integration][both][v04a4]") {
+    auto b = run_both(
+        U"계약 계산기 {\n"
+        U"  함수 더하기(가, 나) -> 결과 { 돌려주기 가 + 나. }\n"
+        U"}\n"
+        U"보여주기(계산기.더하기(2, 3)).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"5") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-4: 계약 필드 + 메서드 혼합", "[integration][both][v04a4]") {
+    auto b = run_both(
+        U"계약 은행 {\n"
+        U"  이름: \"세움은행\"\n"
+        U"  함수 환영() -> 결과 { 돌려주기 \"어서오세요\". }\n"
+        U"}\n"
+        U"보여주기(은행.이름). 보여주기(은행.환영()).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"세움은행") != std::u32string::npos);
+    REQUIRE(b.tree.find(U"어서오세요") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-4: 계약 메서드는 전역으로도 접근 (결정 90)", "[integration][both][v04a4]") {
+    auto b = run_both(
+        U"계약 계산기 { 함수 곱하기(가, 나) -> 결과 { 돌려주기 가 * 나. } }\n"
+        U"보여주기(곱하기(4, 5)).");   // 계약 밖에서 전역 이름으로 직접 호출
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"20") != std::u32string::npos);
+}
+
+TEST_CASE(".담음 빌드 경로: 계약 선언형 블록", "[integration][v04a4][acc-dameum]") {
+    auto out = run_via_dameum(
+        U"계약 창고 { 함수 개수() -> 결과 { 돌려주기 7. } } 보여주기(창고.개수()).");
+    REQUIRE(out.find(U"7") != std::u32string::npos);
+}

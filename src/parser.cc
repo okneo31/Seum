@@ -17,7 +17,13 @@ public:
     Program run() {
         Program prog;
         while (peek().kind != TokenKind::EndOfFile) {
-            prog.statements.push_back(parse_statement());
+            // 계약 선언형 블록 — 결정 87. 메서드+레코드로 desugar 하므로
+            // 한 블록이 여러 statement 를 prog 에 직접 append.
+            if (check_keyword(U"계약")) {
+                parse_contract(prog);
+            } else {
+                prog.statements.push_back(parse_statement());
+            }
         }
         return prog;
     }
@@ -231,6 +237,61 @@ private:
         }
         expect_period();
         return Stmt{std::move(node)};
+    }
+
+    // 계약 선언형 블록 — 결정 63·87·90.
+    // `계약 이름 { 필드 / 함수 }` 를 desugar (백엔드 변경 0):
+    //   - 각 메서드(함수) → 전역 FuncDeclStmt (결정 90: 멤버 전역 등록)
+    //   - 계약 이름 → 전역 레코드 (필드 + 메서드값). 결정 63: 싱글톤.
+    // 블록 내부 항목은 종결자 '.' 없음 (결정 88) — 식 문법이 자기-구분.
+    void parse_contract(Program& prog) {
+        Position pos = peek().pos;
+        advance();  // 계약
+        const Token& name = expect(TokenKind::Identifier, "계약 이름");
+        expect(TokenKind::LBrace, "{");
+
+        auto record = std::make_unique<RecordExpr>();
+        record->pos = pos;
+
+        auto check_dup = [&](const std::u32string& k, Position kp) {
+            for (const RecordField& f : record->fields) {
+                if (f.key == k) {
+                    std::u32string msg = U"계약에 중복된 항목: "; msg += k;
+                    raise(kp, msg);
+                }
+            }
+        };
+
+        while (peek().kind != TokenKind::RBrace
+            && peek().kind != TokenKind::EndOfFile) {
+            if (check_keyword(U"함수") || check_keyword(U"지연값")) {
+                bool getter = check_keyword(U"지연값");
+                Stmt method = parse_func_decl(getter);
+                std::u32string mname = as_func_decl(method)->name;
+                check_dup(mname, pos);
+                prog.statements.push_back(std::move(method));   // 메서드 = 전역
+                auto id = std::make_unique<IdentifierExpr>();
+                id->name = mname;
+                id->pos  = pos;
+                record->fields.push_back(RecordField{mname, Expr{std::move(id)}});
+            } else if (check_keyword(U"자산")) {
+                raise(peek().pos, U"계약의 '자산' 선언은 v0.4a-5에서 지원됩니다");
+            } else {
+                const Token& key = expect(TokenKind::Identifier, "계약 항목 이름");
+                check_dup(key.text, key.pos);
+                expect(TokenKind::Colon, ":");
+                Expr val = parse_expression();
+                record->fields.push_back(RecordField{key.text, std::move(val)});
+            }
+        }
+        expect(TokenKind::RBrace, "}");
+
+        // 변수 이름 = (레코드). — 계약 = 싱글톤 전역 레코드.
+        VarDeclStmt vd;
+        vd.name  = name.text;
+        vd.value = Expr{std::move(record)};
+        vd.pos   = pos;
+        prog.statements.push_back(Stmt{std::move(vd)});
     }
 
     std::vector<Stmt> parse_block() {
