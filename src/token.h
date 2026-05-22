@@ -17,6 +17,7 @@ enum class TokenKind {
     Colon,
     Equals,       // =
     Period,
+    Dot,          // v0.4a-1 (#79) — 멤버 접근 '.' (양쪽 공백 없이 인접)
     // v0.2b 추가 (잠긴 결정 #26).
     EqEq,         // ==
     BangEq,       // !=

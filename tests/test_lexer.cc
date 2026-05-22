@@ -52,3 +52,33 @@ TEST_CASE("렉서: 위치 정보", "[lexer]") {
     REQUIRE(toks[0].pos.line == 1);
     REQUIRE(toks[1].pos.line == 2);
 }
+
+// v0.4a-1 (결정 79): 멤버 접근 '.' 은 양쪽 공백 없이 인접할 때만 Dot,
+// 그 외(뒤가 식별자-시작이 아니거나 앞에 공백)는 문장 종결자 Period.
+TEST_CASE("렉서: 멤버 접근 '.' vs 종결자 '.' — 결정 79", "[lexer]") {
+    // 멤버 접근: 양쪽 공백 없이 인접 → Dot
+    auto m = tokenize(U"위치.ㄱ");
+    REQUIRE(m.size() == 4);
+    REQUIRE(m[0].kind == TokenKind::Identifier);
+    REQUIRE(m[1].kind == TokenKind::Dot);
+    REQUIRE(m[2].kind == TokenKind::Identifier);
+    REQUIRE(m[2].text == U"ㄱ");
+
+    // 체이닝: 용사.위치.ㄱ → Dot 두 개
+    auto c = tokenize(U"용사.위치.ㄱ");
+    REQUIRE(c.size() == 6);
+    REQUIRE(c[1].kind == TokenKind::Dot);
+    REQUIRE(c[3].kind == TokenKind::Dot);
+
+    // 문장 종결자: 뒤가 EOF/개행 → Period
+    auto t = tokenize(U"안녕.");
+    REQUIRE(t[1].kind == TokenKind::Period);
+
+    // 앞에 공백이 인접을 깨면 종결자
+    auto s = tokenize(U"위치 .ㄱ");
+    REQUIRE(s[1].kind == TokenKind::Period);
+
+    // 정수 사이 '.' 은 종결자 (소수점 아님 — 정수만 존재, 회귀 가드)
+    auto n = tokenize(U"3.14");
+    REQUIRE(n[1].kind == TokenKind::Period);
+}

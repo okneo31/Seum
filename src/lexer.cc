@@ -111,6 +111,17 @@ private:
         if (c == U'|' && peek(1) == U'|') { advance(); advance(); return {TokenKind::PipePipe, U"||", start}; }
         if (c == U'-' && peek(1) == U'>') { advance(); advance(); return {TokenKind::Arrow,    U"->", start}; }
 
+        // 멤버 접근 '.' vs 문장 종결자 '.' — 결정 79.
+        // 멤버 접근: 양쪽이 공백 없이 인접 (`용사.위치`). 종결자: 앞에 공백이 있거나
+        // 뒤가 식별자-시작 문자가 아님 (개행/}/EOF/숫자 등).
+        if (c == U'.') {
+            char32_t before = (i_ > 0) ? src_[i_ - 1] : U'\0';
+            bool member = before != U'\0' && !utf8::is_whitespace(before)
+                          && utf8::is_identifier_start(peek(1));
+            advance();  // .
+            return {member ? TokenKind::Dot : TokenKind::Period, U".", start};
+        }
+
         // 1글자 기호
         advance();
         switch (c) {
@@ -121,7 +132,6 @@ private:
             case U',': return {TokenKind::Comma,   U",", start};
             case U':': return {TokenKind::Colon,   U":", start};
             case U'=': return {TokenKind::Equals,  U"=", start};
-            case U'.': return {TokenKind::Period,  U".", start};
             case U'<': return {TokenKind::Lt,      U"<", start};
             case U'>': return {TokenKind::Gt,      U">", start};
             case U'!': return {TokenKind::Bang,    U"!", start};

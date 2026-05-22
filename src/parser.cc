@@ -329,27 +329,60 @@ private:
         return parse_call_or_primary();
     }
 
+    // 후위 연산: 호출 `f(…)` 과 멤버 접근 `e.필드` — 둘 다 좌결합, 교차 가능.
     Expr parse_call_or_primary() {
-        Expr primary = parse_primary();
-        while (peek().kind == TokenKind::LParen) {
-            Position call_pos = peek().pos;
-            advance();  // (
-            std::vector<Expr> args;
-            if (peek().kind != TokenKind::RParen) {
-                args.push_back(parse_expression());
-                while (peek().kind == TokenKind::Comma) {
-                    advance();
+        Expr e = parse_primary();
+        while (true) {
+            if (peek().kind == TokenKind::LParen) {
+                Position call_pos = peek().pos;
+                advance();  // (
+                std::vector<Expr> args;
+                if (peek().kind != TokenKind::RParen) {
                     args.push_back(parse_expression());
+                    while (peek().kind == TokenKind::Comma) {
+                        advance();
+                        args.push_back(parse_expression());
+                    }
                 }
+                expect(TokenKind::RParen, ")");
+                auto call = std::make_unique<CallExpr>();
+                call->callee = std::move(e);
+                call->args   = std::move(args);
+                call->pos    = call_pos;
+                e = Expr{std::move(call)};
+            } else if (peek().kind == TokenKind::Dot) {
+                // 멤버 접근 — 결정 #79. lexer 가 Dot/Period 를 이미 구분.
+                Position dot_pos = peek().pos;
+                advance();  // .
+                const Token& field = expect(TokenKind::Identifier, "멤버 이름");
+                auto m = std::make_unique<MemberExpr>();
+                m->target = std::move(e);
+                m->field  = field.text;
+                m->pos    = dot_pos;
+                e = Expr{std::move(m)};
+            } else {
+                break;
             }
-            expect(TokenKind::RParen, ")");
-            auto call = std::make_unique<CallExpr>();
-            call->callee = std::move(primary);
-            call->args = std::move(args);
-            call->pos = call_pos;
-            primary = std::move(call);
         }
-        return primary;
+        return e;
+    }
+
+    // 레코드 리터럴 (키: 값, …) — 결정 #69. 호출 측에서 '(' + 식별자 + ':' 확인 후 진입.
+    Expr parse_record_literal() {
+        Position pos = peek().pos;
+        advance();  // (
+        auto rec = std::make_unique<RecordExpr>();
+        rec->pos = pos;
+        while (true) {
+            const Token& key = expect(TokenKind::Identifier, "레코드 키 이름");
+            expect(TokenKind::Colon, ":");
+            Expr val = parse_expression();
+            rec->fields.push_back(RecordField{key.text, std::move(val)});
+            if (peek().kind == TokenKind::Comma) { advance(); continue; }
+            break;
+        }
+        expect(TokenKind::RParen, ")");
+        return Expr{std::move(rec)};
     }
 
     Expr parse_primary() {
@@ -375,6 +408,12 @@ private:
             return Expr{std::move(n)};
         }
         if (t.kind == TokenKind::LParen) {
+            // 레코드 리터럴 vs 괄호식 — 결정 #69·92 (3-5).
+            // '(' 다음이 `식별자 :` 면 레코드, 아니면 괄호식.
+            if (peek(1).kind == TokenKind::Identifier
+                && peek(2).kind == TokenKind::Colon) {
+                return parse_record_literal();
+            }
             advance();
             Expr inner = parse_expression();
             expect(TokenKind::RParen, ")");

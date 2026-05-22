@@ -16,6 +16,7 @@ const char* token_kind_name(TokenKind k) {
         case TokenKind::Colon:      return ":";
         case TokenKind::Equals:     return "=";
         case TokenKind::Period:     return ".";
+        case TokenKind::Dot:        return ". (멤버 접근)";
         case TokenKind::EqEq:       return "==";
         case TokenKind::BangEq:     return "!=";
         case TokenKind::Lt:         return "<";

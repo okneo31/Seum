@@ -140,6 +140,30 @@ Value eval_expr(const Expr& e, Environment& env) {
         // v0.5+ 에서 sandbox/권한 검사 본격 도입.
         return eval_expr(us->inner, env);
     }
+    if (auto* re = as_record_lit(e)) {
+        // v0.4a-1 #69: 레코드 리터럴 → RecordValue (필드 순서 보존).
+        auto rec = std::make_shared<RecordValue>();
+        rec->fields.reserve(re->fields.size());
+        for (const RecordField& f : re->fields) {
+            rec->fields.emplace_back(f.key, eval_expr(f.value, env));
+        }
+        return Value{rec};
+    }
+    if (auto* me = as_member(e)) {
+        // v0.4a-1 #79: 멤버 접근 — v0.4a 는 레코드 대상만.
+        Value target = eval_expr(me->target, env);
+        RecordValue* rec = as_record(target);
+        if (!rec) {
+            raise(me->pos, U"멤버 접근은 레코드에만 가능합니다");
+        }
+        const Value* fv = rec->get(me->field);
+        if (!fv) {
+            std::u32string msg = U"레코드에 없는 멤버: ";
+            msg += me->field;
+            raise(me->pos, msg);
+        }
+        return *fv;
+    }
     return make_none();  // unreachable
 }
 

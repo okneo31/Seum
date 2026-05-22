@@ -3,11 +3,13 @@
 #include "common.h"
 
 #include <functional>
+#include <utility>
 
 namespace seum {
 
 struct CallableValue;
 struct GetterValue;
+struct RecordValue;
 
 // SST(세움 표준시) 기준 epoch부터의 초 단위.
 struct TimeValue {
@@ -21,7 +23,8 @@ using Value = std::variant<
     std::u32string,
     TimeValue,
     std::shared_ptr<CallableValue>,
-    std::shared_ptr<GetterValue>
+    std::shared_ptr<GetterValue>,
+    std::shared_ptr<RecordValue>
 >;
 
 struct CallableValue {
@@ -33,6 +36,14 @@ struct CallableValue {
 struct GetterValue {
     std::u32string name;
     std::function<Value()> fn;
+};
+
+// 범용 자모-키 레코드 — 결정 #69. (ㄱ: 10, ㅅ: 20) 같은 값.
+// shared_ptr 로 보관 → 참조 의미 (멤버 대입이 별칭에 반영, v0.4a-2 예정).
+struct RecordValue {
+    std::vector<std::pair<std::u32string, Value>> fields;
+    Value*       get(const std::u32string& key);
+    const Value* get(const std::u32string& key) const;
 };
 
 Value make_none();
@@ -50,6 +61,7 @@ bool is_string(const Value& v);
 bool is_time(const Value& v);
 bool is_callable(const Value& v);
 bool is_getter(const Value& v);
+bool is_record(const Value& v);
 
 const bool* as_bool(const Value& v);
 const std::int64_t* as_int(const Value& v);
@@ -57,6 +69,7 @@ const std::u32string* as_string(const Value& v);
 const TimeValue* as_time(const Value& v);
 const CallableValue* as_callable(const Value& v);
 const GetterValue* as_getter(const Value& v);
+RecordValue* as_record(const Value& v);
 
 // '보여주기' 출력용 문자열 표현. SST 시각은 세움력 포맷으로.
 std::u32string render_value(const Value& v);

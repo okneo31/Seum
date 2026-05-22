@@ -18,6 +18,7 @@ bool is_string(const Value& v)   { return std::holds_alternative<std::u32string>
 bool is_time(const Value& v)     { return std::holds_alternative<TimeValue>(v); }
 bool is_callable(const Value& v) { return std::holds_alternative<std::shared_ptr<CallableValue>>(v); }
 bool is_getter(const Value& v)   { return std::holds_alternative<std::shared_ptr<GetterValue>>(v); }
+bool is_record(const Value& v)   { return std::holds_alternative<std::shared_ptr<RecordValue>>(v); }
 
 const bool*          as_bool(const Value& v)   { return std::get_if<bool>(&v); }
 const std::int64_t*  as_int(const Value& v)    { return std::get_if<std::int64_t>(&v); }
@@ -31,6 +32,19 @@ const CallableValue* as_callable(const Value& v) {
 const GetterValue* as_getter(const Value& v) {
     auto p = std::get_if<std::shared_ptr<GetterValue>>(&v);
     return p ? p->get() : nullptr;
+}
+RecordValue* as_record(const Value& v) {
+    auto p = std::get_if<std::shared_ptr<RecordValue>>(&v);
+    return p ? p->get() : nullptr;
+}
+
+Value* RecordValue::get(const std::u32string& key) {
+    for (auto& f : fields) if (f.first == key) return &f.second;
+    return nullptr;
+}
+const Value* RecordValue::get(const std::u32string& key) const {
+    for (const auto& f : fields) if (f.first == key) return &f.second;
+    return nullptr;
 }
 
 namespace {
@@ -152,6 +166,16 @@ std::u32string render_value(const Value& v) {
             return U"<함수 " + x->name + U">";
         } else if constexpr (std::is_same_v<T, std::shared_ptr<GetterValue>>) {
             return U"<지연값 " + x->name + U">";
+        } else if constexpr (std::is_same_v<T, std::shared_ptr<RecordValue>>) {
+            std::u32string out = U"(";
+            for (std::size_t i = 0; i < x->fields.size(); ++i) {
+                if (i) out += U", ";
+                out += x->fields[i].first;
+                out += U": ";
+                out += render_value(x->fields[i].second);
+            }
+            out += U")";
+            return out;
         }
     }, v);
 }

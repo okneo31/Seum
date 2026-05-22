@@ -11,6 +11,8 @@ Position position_of(const Expr& e) {
     if (auto p = std::get_if<std::unique_ptr<BinaryExpr>>(&e))    return (*p)->pos;
     if (auto p = std::get_if<std::unique_ptr<UnaryExpr>>(&e))     return (*p)->pos;
     if (auto p = std::get_if<std::unique_ptr<UnsafeExpr>>(&e))    return (*p)->pos;
+    if (auto p = std::get_if<std::unique_ptr<RecordExpr>>(&e))    return (*p)->pos;
+    if (auto p = std::get_if<std::unique_ptr<MemberExpr>>(&e))    return (*p)->pos;
     return {};
 }
 
@@ -22,6 +24,8 @@ bool is_call      (const Expr& e) { return std::holds_alternative<std::unique_pt
 bool is_binary    (const Expr& e) { return std::holds_alternative<std::unique_ptr<BinaryExpr>>(e); }
 bool is_unary     (const Expr& e) { return std::holds_alternative<std::unique_ptr<UnaryExpr>>(e); }
 bool is_unsafe    (const Expr& e) { return std::holds_alternative<std::unique_ptr<UnsafeExpr>>(e); }
+bool is_record_lit(const Expr& e) { return std::holds_alternative<std::unique_ptr<RecordExpr>>(e); }
+bool is_member    (const Expr& e) { return std::holds_alternative<std::unique_ptr<MemberExpr>>(e); }
 
 const IntLitExpr* as_int_lit(const Expr& e) {
     auto p = std::get_if<std::unique_ptr<IntLitExpr>>(&e);
@@ -53,6 +57,14 @@ const UnaryExpr* as_unary(const Expr& e) {
 }
 const UnsafeExpr* as_unsafe(const Expr& e) {
     auto p = std::get_if<std::unique_ptr<UnsafeExpr>>(&e);
+    return p ? p->get() : nullptr;
+}
+const RecordExpr* as_record_lit(const Expr& e) {
+    auto p = std::get_if<std::unique_ptr<RecordExpr>>(&e);
+    return p ? p->get() : nullptr;
+}
+const MemberExpr* as_member(const Expr& e) {
+    auto p = std::get_if<std::unique_ptr<MemberExpr>>(&e);
     return p ? p->get() : nullptr;
 }
 

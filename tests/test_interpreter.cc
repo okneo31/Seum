@@ -314,3 +314,46 @@ TEST_CASE("해석기 v0.2d: 반복 안에 만약 중첩", "[interpreter][v02d]")
     while ((at = cap.buffer.find(U"hit", at)) != std::u32string::npos) { ++count; at += 3; }
     REQUIRE(count == 1);
 }
+
+// === v0.4a-1: 레코드 + 멤버 접근 (결정 69·79·92) — 트리 경로 ===
+
+TEST_CASE("해석기 v0.4a-1: 레코드 멤버 읽기", "[interpreter][v04a]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    run(U"변수 위치 = (ㄱ: 10, ㅅ: 20). 보여주기(위치.ㄱ). 보여주기(위치.ㅅ).", env);
+    REQUIRE(cap.buffer.find(U"10") != std::u32string::npos);
+    REQUIRE(cap.buffer.find(U"20") != std::u32string::npos);
+}
+
+TEST_CASE("해석기 v0.4a-1: 중첩 레코드 멤버 체이닝", "[interpreter][v04a]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    run(U"변수 용사 = (위치: (ㄱ: 10, ㅅ: 20)). 보여주기(용사.위치.ㄱ).", env);
+    REQUIRE(cap.buffer.find(U"10") != std::u32string::npos);
+}
+
+TEST_CASE("해석기 v0.4a-1: 레코드 출력 형태", "[interpreter][v04a]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    run(U"보여주기((ㄱ: 1, ㅅ: 2)).", env);
+    REQUIRE(cap.buffer.find(U"(ㄱ: 1, ㅅ: 2)") != std::u32string::npos);
+}
+
+TEST_CASE("해석기 v0.4a-1: 없는 멤버 접근은 한국어 에러 (4-9)", "[interpreter][v04a]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    REQUIRE_THROWS_AS(run(U"변수 r = (ㄱ: 1). 보여주기(r.ㅎ).", env), SeumError);
+}
+
+TEST_CASE("해석기 v0.4a-1: 레코드 아닌 값 멤버 접근은 에러", "[interpreter][v04a]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    REQUIRE_THROWS_AS(run(U"변수 x = 5. 보여주기(x.ㄱ).", env), SeumError);
+}
+
+TEST_CASE("해석기 v0.4a-1: 레코드 필드 값으로 식 사용", "[interpreter][v04a]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    run(U"변수 r = (합: 1 + 2 * 3). 보여주기(r.합).", env);
+    REQUIRE(cap.buffer.find(U"7") != std::u32string::npos);
+}

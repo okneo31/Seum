@@ -107,6 +107,13 @@ struct Lowerer {
             // v0.3e 결정 #58: 위험 { 식 } = inner 그대로 lower. marker.
             return lower_expr(us->inner);
         }
+        if (is_record_lit(e) || is_member(e)) {
+            // v0.4a-1: 레코드·멤버 접근은 트리 경로 먼저 (step 2a).
+            // --vm 경로 lowering 은 v0.4a-2b 에서. 그 전엔 명확한 한국어 에러.
+            raise(position_of(e),
+                  U"레코드·멤버 접근은 아직 --vm 경로에서 미지원입니다 "
+                  U"(v0.4a-2b 예정 — 지금은 --tree 로 실행하세요)");
+        }
         return new_reg();
     }
 

@@ -13,6 +13,8 @@ struct CallExpr;
 struct BinaryExpr;
 struct UnaryExpr;
 struct UnsafeExpr;            // v0.3e: 위험 { ... } 식
+struct RecordExpr;            // v0.4a-1: 레코드 리터럴 (#69)
+struct MemberExpr;            // v0.4a-1: 멤버 접근 (#79)
 struct IfStmt;
 struct RepeatStmt;
 struct WhileStmt;
@@ -27,7 +29,9 @@ using Expr = std::variant<
     std::unique_ptr<CallExpr>,
     std::unique_ptr<BinaryExpr>,
     std::unique_ptr<UnaryExpr>,
-    std::unique_ptr<UnsafeExpr>
+    std::unique_ptr<UnsafeExpr>,
+    std::unique_ptr<RecordExpr>,
+    std::unique_ptr<MemberExpr>
 >;
 
 struct IntLitExpr {
@@ -76,6 +80,23 @@ struct UnaryExpr {
 struct UnsafeExpr {
     Expr      inner;
     Position  pos;
+};
+
+// 레코드 리터럴 (키: 값, …) — 결정 #69. 범용 자모-키 레코드.
+struct RecordField {
+    std::u32string key;
+    Expr           value;
+};
+struct RecordExpr {
+    std::vector<RecordField> fields;
+    Position pos;
+};
+
+// 멤버 접근 `대상.필드` — 결정 #79. lexer 가 Dot 토큰으로 구분.
+struct MemberExpr {
+    Expr           target;
+    std::u32string field;
+    Position pos;
 };
 
 // === Statements ===
@@ -162,6 +183,8 @@ bool is_call      (const Expr& e);
 bool is_binary    (const Expr& e);
 bool is_unary     (const Expr& e);
 bool is_unsafe    (const Expr& e);
+bool is_record_lit(const Expr& e);
+bool is_member    (const Expr& e);
 
 const IntLitExpr*     as_int_lit   (const Expr& e);
 const StringLitExpr*  as_string_lit(const Expr& e);
@@ -171,6 +194,8 @@ const CallExpr*       as_call      (const Expr& e);
 const BinaryExpr*     as_binary    (const Expr& e);
 const UnaryExpr*      as_unary     (const Expr& e);
 const UnsafeExpr*     as_unsafe    (const Expr& e);
+const RecordExpr*     as_record_lit(const Expr& e);
+const MemberExpr*     as_member    (const Expr& e);
 
 bool is_import_stmt   (const Stmt& s);
 bool is_var_decl_stmt (const Stmt& s);

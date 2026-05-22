@@ -44,3 +44,54 @@ TEST_CASE("파서: 함수 호출", "[parser]") {
 TEST_CASE("파서: 종결자 누락은 오류", "[parser]") {
     REQUIRE_THROWS(parse_source(U"보여주기(\"안녕\")"));
 }
+
+// === v0.4a-1: 레코드 리터럴 + 멤버 접근 (결정 69·79·92) ===
+
+TEST_CASE("파서 v0.4a-1: 레코드 리터럴", "[parser][v04a]") {
+    Program p = parse_source(U"변수 위치 = (ㄱ: 10, ㅅ: 20).");
+    auto* v = as_var_decl_stmt(p.statements[0]);
+    REQUIRE(v != nullptr);
+    REQUIRE(is_record_lit(v->value));
+    auto* rec = as_record_lit(v->value);
+    REQUIRE(rec != nullptr);
+    REQUIRE(rec->fields.size() == 2);
+    REQUIRE(rec->fields[0].key == U"ㄱ");
+    REQUIRE(rec->fields[1].key == U"ㅅ");
+}
+
+TEST_CASE("파서 v0.4a-1: 멤버 접근", "[parser][v04a]") {
+    Program p = parse_source(U"보여주기(위치.ㄱ).");
+    auto* es = as_expr_stmt(p.statements[0]);
+    REQUIRE(es != nullptr);
+    auto* call = as_call(es->expr);
+    REQUIRE(call != nullptr);
+    REQUIRE(call->args.size() == 1);
+    REQUIRE(is_member(call->args[0]));
+    auto* m = as_member(call->args[0]);
+    REQUIRE(m != nullptr);
+    REQUIRE(m->field == U"ㄱ");
+    REQUIRE(is_identifier(m->target));
+}
+
+TEST_CASE("파서 v0.4a-1: 멤버 접근 체이닝", "[parser][v04a]") {
+    Program p = parse_source(U"보여주기(용사.위치.ㄱ).");
+    auto* es = as_expr_stmt(p.statements[0]);
+    auto* call = as_call(es->expr);
+    REQUIRE(call != nullptr);
+    auto* outer = as_member(call->args[0]);   // (용사.위치).ㄱ
+    REQUIRE(outer != nullptr);
+    REQUIRE(outer->field == U"ㄱ");
+    REQUIRE(is_member(outer->target));        // 용사.위치
+    auto* inner = as_member(outer->target);
+    REQUIRE(inner != nullptr);
+    REQUIRE(inner->field == U"위치");
+}
+
+TEST_CASE("파서 v0.4a-1: 괄호식은 레코드가 아님", "[parser][v04a]") {
+    // (1 + 2) * 3 — '(' 다음이 정수라 레코드 아님 (결정 92, 3-5)
+    Program p = parse_source(U"보여주기((1 + 2) * 3).");
+    auto* es = as_expr_stmt(p.statements[0]);
+    auto* call = as_call(es->expr);
+    REQUIRE(call != nullptr);
+    REQUIRE(is_binary(call->args[0]));   // 곱셈식
+}
