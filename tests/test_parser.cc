@@ -140,6 +140,36 @@ TEST_CASE("파서 v0.4a-4: 계약 중복 항목은 오류", "[parser][v04a4]") {
     REQUIRE_THROWS(parse_source(U"계약 X { 가: 1 가: 2 }"));
 }
 
-TEST_CASE("파서 v0.4a-4: 계약의 자산은 아직 미지원 오류", "[parser][v04a4]") {
-    REQUIRE_THROWS(parse_source(U"계약 X { 자산 금고: BTC }"));
+// === v0.4a-5b: 계약 자산 + 받아서 (결정 64·65) ===
+
+TEST_CASE("파서 v0.4a-5b: 계약 자산 선언 → 통화(0) 필드로 desugar", "[parser][v04a5b]") {
+    // 자산 금고: BTC → 레코드 필드 금고: BTC(0)
+    Program p = parse_source(U"계약 X { 자산 금고: BTC }");
+    REQUIRE(p.statements.size() == 1);
+    REQUIRE(is_var_decl_stmt(p.statements[0]));
+    auto* vd = as_var_decl_stmt(p.statements[0]);
+    REQUIRE(is_record_lit(vd->value));
+    auto* rec = as_record_lit(vd->value);
+    REQUIRE(rec->fields.size() == 1);
+    REQUIRE(rec->fields[0].key == U"금고");
+    REQUIRE(is_call(rec->fields[0].value));   // BTC(0)
+}
+
+TEST_CASE("파서 v0.4a-5b: 받아서는 계약 밖에서 오류", "[parser][v04a5b]") {
+    REQUIRE_THROWS(parse_source(U"함수 예금(돈) 받아서 -> 금고 { }"));
+}
+
+// === v0.4a-5c: 통화 발행 + -= (결정 64) ===
+
+TEST_CASE("파서 v0.4a-5c: 통화 선언 → 통화등록 호출로 desugar", "[parser][v04a5c]") {
+    Program p = parse_source(U"통화 마실.");
+    REQUIRE(p.statements.size() == 1);
+    REQUIRE(is_var_decl_stmt(p.statements[0]));
+    auto* v = as_var_decl_stmt(p.statements[0]);
+    REQUIRE(v->name == U"마실");
+    REQUIRE(is_call(v->value));
+}
+
+TEST_CASE("파서 v0.4a-5c: 통화 선언 페그식 허용", "[parser][v04a5c]") {
+    REQUIRE_NOTHROW(parse_source(U"통화 마실 = BTC / 100000."));
 }

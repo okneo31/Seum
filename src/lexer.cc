@@ -18,6 +18,7 @@ const std::unordered_set<std::u32string>& keywords() {
         U"지연값",     // v0.3e (#59) — Getter 1급 syntax
         U"계약",
         U"자산",
+        U"통화",
         U"위험",
         U"받아서",
         U"누르면",
@@ -111,6 +112,7 @@ private:
         if (c == U'|' && peek(1) == U'|') { advance(); advance(); return {TokenKind::PipePipe, U"||", start}; }
         if (c == U'-' && peek(1) == U'>') { advance(); advance(); return {TokenKind::Arrow,    U"->", start}; }
         if (c == U'+' && peek(1) == U'=') { advance(); advance(); return {TokenKind::PlusEq,   U"+=", start}; }
+        if (c == U'-' && peek(1) == U'=') { advance(); advance(); return {TokenKind::MinusEq,  U"-=", start}; }
 
         // 멤버 접근 '.' vs 문장 종결자 '.' — 결정 79.
         // 멤버 접근: 양쪽이 공백 없이 인접 (`용사.위치`). 종결자: 앞에 공백이 있거나

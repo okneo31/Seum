@@ -68,6 +68,24 @@ Value add_values(const Value& l, const Value& r, Position pos) {
     return make_int(*li + *ri);
 }
 
+// v0.4a-5c: `-` / `-=` 의미 — 자산 빼기(통화 일치·음수 금지) 또는 정수 빼기.
+Value sub_values(const Value& l, const Value& r, Position pos) {
+    if (auto la = as_asset(l)) {
+        auto ra = as_asset(r);
+        if (!ra) raise(pos, U"자산에서는 자산만 뺄 수 있습니다");
+        if (la->currency != ra->currency) {
+            raise(pos, U"통화가 다른 자산은 뺄 수 없습니다");
+        }
+        std::int64_t d = la->amount - ra->amount;
+        if (d < 0) raise(pos, U"자산은 음수가 될 수 없습니다");
+        return make_asset(la->currency, d);
+    }
+    auto li = as_int(l);
+    auto ri = as_int(r);
+    if (!li || !ri) raise(pos, U"- 는 정수 또는 자산에만 적용 가능합니다");
+    return make_int(*li - *ri);
+}
+
 Value eval_binary(const BinaryExpr& B, Environment& env) {
     const std::u32string& op = B.op;
     // 단락 평가: && / ||
@@ -94,6 +112,8 @@ Value eval_binary(const BinaryExpr& B, Environment& env) {
 
     // v0.2c: `+` 다형 — add_values 로 추출 (v0.4a-2 `+=` 와 공유).
     if (op == U"+") return add_values(l, r, B.pos);
+    // v0.4a-5c: `-` 다형 — sub_values (자산·정수). `-=` 와 공유.
+    if (op == U"-") return sub_values(l, r, B.pos);
 
     // 그 외 산술/비교 — int 전용
     auto* li = as_int(l);
@@ -102,8 +122,7 @@ Value eval_binary(const BinaryExpr& B, Environment& env) {
         raise(B.pos, U"비교/산술 연산은 정수에만 적용 가능합니다");
     }
 
-    // v0.2c 산술
-    if (op == U"-") return make_int(*li - *ri);
+    // v0.2c 산술 (`-` 는 위에서 sub_values 로 처리)
     if (op == U"*") return make_int(*li * *ri);
     if (op == U"/") {
         if (*ri == 0) raise(B.pos, U"0으로 나눌 수 없습니다");
@@ -220,6 +239,8 @@ void eval_stmt(const Stmt& s, Environment& env) {
         }
         if (asn->op == U"+=") {
             *slot = add_values(*slot, rhs, asn->pos);
+        } else if (asn->op == U"-=") {
+            *slot = sub_values(*slot, rhs, asn->pos);
         } else {
             *slot = std::move(rhs);
         }

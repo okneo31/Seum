@@ -168,6 +168,7 @@ struct FuncDeclStmt {
     std::u32string             result_name;
     std::vector<Stmt>          body;
     bool                       is_getter{false};   // v0.3e #59 — `지연값` syntax
+    std::u32string             accumulate_target;  // v0.4a-5b #65 — `받아서 -> X` (빈 문자열 = 없음)
     Position                   pos;
 };
 

@@ -270,3 +270,42 @@ TEST_CASE("VM v0.4a-5: 통화 불일치는 한국어 에러", "[vm][v04a5]") {
         compile_and_run(U"가져오기(금융). 변수 w = (돈: BTC(1)). w.돈 += KRW(2).", env),
         SeumError);
 }
+
+// === v0.4a-5b: 계약·자산·받아서 — VM 경로 (결정 64·65) ===
+
+TEST_CASE("VM v0.4a-5b: 계약·자산·받아서 입금", "[vm][v04a5b]") {
+    std::u32string captured;
+    auto sink = [&captured](const std::u32string& s) { captured += s; };
+    Environment env;
+    modules::register_builtin(env, sink);
+    modules::register_finance(env);
+    compile_and_run(
+        U"가져오기(금융).\n"
+        U"계약 은행 { 자산 잔고: KRW  함수 입금(돈: KRW) 받아서 -> 잔고 {} }\n"
+        U"은행.입금(KRW(5000)).\n"
+        U"보여주기(은행.잔고).", env);
+    REQUIRE(captured.find(U"KRW(5000)") != std::u32string::npos);
+}
+
+// === v0.4a-5c: 통화·금액()·-= — VM 경로 ===
+
+TEST_CASE("VM v0.4a-5c: 통화 선언 + 금액()", "[vm][v04a5c]") {
+    std::u32string captured;
+    auto sink = [&captured](const std::u32string& s) { captured += s; };
+    Environment env;
+    modules::register_builtin(env, sink);
+    modules::register_finance(env);
+    compile_and_run(U"가져오기(금융). 통화 마실. 보여주기(금액(마실(8200))).", env);
+    REQUIRE(captured.find(U"8200") != std::u32string::npos);
+}
+
+TEST_CASE("VM v0.4a-5c: 자산 -= 빼기", "[vm][v04a5c]") {
+    std::u32string captured;
+    auto sink = [&captured](const std::u32string& s) { captured += s; };
+    Environment env;
+    modules::register_builtin(env, sink);
+    modules::register_finance(env);
+    compile_and_run(
+        U"가져오기(금융). 변수 w = (돈: KRW(500)). w.돈 -= KRW(150). 보여주기(w.돈).", env);
+    REQUIRE(captured.find(U"KRW(350)") != std::u32string::npos);
+}

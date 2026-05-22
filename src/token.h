@@ -37,6 +37,7 @@ enum class TokenKind {
     // v0.2e (#30).
     Arrow,        // ->
     PlusEq,       // += (v0.4a-2 #81) — 복합대입
+    MinusEq,      // -= (v0.4a-5c) — 자산 빼기 복합대입
     EndOfFile,
 };
 

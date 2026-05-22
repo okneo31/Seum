@@ -73,10 +73,17 @@ private:
     Stmt parse_statement() {
         if (check_keyword(U"가져오기"))   return parse_import();
         if (check_keyword(U"변수"))       return parse_var_decl();
+        if (check_keyword(U"통화"))       return parse_currency_decl();
         if (check_keyword(U"만약"))       return parse_if();
         if (check_keyword(U"반복"))       return parse_repeat();
         if (check_keyword(U"동안"))       return parse_while();
-        if (check_keyword(U"함수"))       return parse_func_decl(/*is_getter=*/false);
+        if (check_keyword(U"함수")) {
+            Stmt s = parse_func_decl(/*is_getter=*/false);
+            if (!as_func_decl(s)->accumulate_target.empty()) {
+                raise(as_func_decl(s)->pos, "'받아서'는 계약 메서드에서만 쓸 수 있습니다");
+            }
+            return s;
+        }
         if (check_keyword(U"지연값"))     return parse_func_decl(/*is_getter=*/true);
         if (check_keyword(U"돌려주기"))   return parse_return();
         return parse_expr_stmt();
@@ -105,9 +112,13 @@ private:
     Stmt parse_expr_stmt() {
         Position pos = peek().pos;
         Expr e = parse_expression();
-        // 필드 대입 — 결정 #81. `대상.필드 = 식.` / `대상.필드 += 식.`
-        if (peek().kind == TokenKind::Equals || peek().kind == TokenKind::PlusEq) {
-            std::u32string op = (peek().kind == TokenKind::PlusEq) ? U"+=" : U"=";
+        // 필드 대입 — 결정 #81. `대상.필드 = 식.` / `+= 식.` / `-= 식.`
+        if (peek().kind == TokenKind::Equals
+            || peek().kind == TokenKind::PlusEq
+            || peek().kind == TokenKind::MinusEq) {
+            std::u32string op = U"=";
+            if (peek().kind == TokenKind::PlusEq)  op = U"+=";
+            if (peek().kind == TokenKind::MinusEq) op = U"-=";
             Position op_pos = peek().pos;
             advance();  // = / +=
             if (!is_member(e)) {
@@ -184,8 +195,18 @@ private:
         return Stmt{std::move(node)};
     }
 
+    // v0.4a-5b: 타입 매개변수 `이름: 타입` — 타입 주석은 파싱하되 a-5 에선 무시
+    // (자산 += 의 통화 검사가 실제 타입 안전성 담당). 결정 §5.
+    void skip_param_type() {
+        if (peek().kind == TokenKind::Colon) {
+            advance();  // :
+            expect(TokenKind::Identifier, "매개변수 타입 (BTC/KRW 등)");
+        }
+    }
+
     // 함수 이름(p1, p2) -> 결과 { body } — 결정 #30.
-    // 또는 지연값 이름() -> 결과 { body } — 결정 #59 (is_getter=true, 매개변수 0개).
+    // 지연값 이름() -> 결과 { body } — 결정 #59.
+    // 함수 이름(받은돈: BTC) 받아서 -> 대상 { body } — 결정 #65 (계약 메서드).
     Stmt parse_func_decl(bool is_getter) {
         Position pos = peek().pos;
         advance();  // 함수 / 지연값
@@ -194,33 +215,52 @@ private:
         std::vector<std::u32string> params;
         if (peek().kind != TokenKind::RParen) {
             params.push_back(expect(TokenKind::Identifier, "매개변수 이름").text);
+            skip_param_type();
             while (peek().kind == TokenKind::Comma) {
                 advance();
                 params.push_back(expect(TokenKind::Identifier, "매개변수 이름").text);
+                skip_param_type();
             }
         }
         expect(TokenKind::RParen, ")");
-        if (is_getter && !params.empty()) {
-            raise(pos, "지연값은 매개변수를 가질 수 없습니다");
-        }
-        expect(TokenKind::Arrow, "->");
+
+        std::u32string accumulate_target;
         std::u32string result_name;
-        if (peek().kind == TokenKind::Identifier) {
-            result_name = advance().text;
-        } else if (check_keyword(U"없음")) {
-            result_name = U"없음";
-            advance();
+        if (check_keyword(U"받아서")) {
+            // 받아서 -> 대상 — 결정 #65. 결과명 대신 누적 대상.
+            if (is_getter) {
+                raise(peek().pos, "지연값은 '받아서'를 가질 수 없습니다");
+            }
+            advance();  // 받아서
+            expect(TokenKind::Arrow, "->");
+            accumulate_target = expect(TokenKind::Identifier, "받아서 누적 대상").text;
+            result_name = U"없음";   // 받아서 함수는 없음 반환
         } else {
-            raise(peek().pos, "결과 이름 또는 '없음' 이 와야 합니다");
+            if (is_getter && !params.empty()) {
+                raise(pos, "지연값은 매개변수를 가질 수 없습니다");
+            }
+            expect(TokenKind::Arrow, "->");
+            if (peek().kind == TokenKind::Identifier) {
+                result_name = advance().text;
+            } else if (check_keyword(U"없음")) {
+                result_name = U"없음";
+                advance();
+            } else {
+                raise(peek().pos, "결과 이름 또는 '없음' 이 와야 합니다");
+            }
+        }
+        if (!accumulate_target.empty() && params.empty()) {
+            raise(pos, "'받아서' 함수는 매개변수가 1개 이상 필요합니다");
         }
         auto body = parse_block();
         auto node = std::make_unique<FuncDeclStmt>();
-        node->name        = name.text;
-        node->params      = std::move(params);
-        node->result_name = std::move(result_name);
-        node->body        = std::move(body);
-        node->is_getter   = is_getter;
-        node->pos         = pos;
+        node->name              = name.text;
+        node->params            = std::move(params);
+        node->result_name       = std::move(result_name);
+        node->body              = std::move(body);
+        node->is_getter         = is_getter;
+        node->accumulate_target = std::move(accumulate_target);
+        node->pos               = pos;
         return Stmt{std::move(node)};
     }
 
@@ -267,15 +307,49 @@ private:
             if (check_keyword(U"함수") || check_keyword(U"지연값")) {
                 bool getter = check_keyword(U"지연값");
                 Stmt method = parse_func_decl(getter);
-                std::u32string mname = as_func_decl(method)->name;
-                check_dup(mname, pos);
+                FuncDeclStmt* fd =
+                    std::get<std::unique_ptr<FuncDeclStmt>>(method).get();
+                check_dup(fd->name, pos);
+                // 받아서 -> 대상 desugar — 결정 65. 본문 앞에
+                //   `<계약>.<대상> += <첫 매개변수>.` 주입 (누적 먼저).
+                if (!fd->accumulate_target.empty()) {
+                    auto cid = std::make_unique<IdentifierExpr>();
+                    cid->name = name.text; cid->pos = pos;
+                    auto mem = std::make_unique<MemberExpr>();
+                    mem->target = Expr{std::move(cid)};
+                    mem->field  = fd->accumulate_target;
+                    mem->pos    = pos;
+                    auto pid = std::make_unique<IdentifierExpr>();
+                    pid->name = fd->params[0]; pid->pos = pos;
+                    AssignStmt acc;
+                    acc.target = Expr{std::move(mem)};
+                    acc.op     = U"+=";
+                    acc.value  = Expr{std::move(pid)};
+                    acc.pos    = pos;
+                    fd->body.insert(fd->body.begin(), Stmt{std::move(acc)});
+                }
+                std::u32string mname = fd->name;
                 prog.statements.push_back(std::move(method));   // 메서드 = 전역
                 auto id = std::make_unique<IdentifierExpr>();
                 id->name = mname;
                 id->pos  = pos;
                 record->fields.push_back(RecordField{mname, Expr{std::move(id)}});
             } else if (check_keyword(U"자산")) {
-                raise(peek().pos, U"계약의 '자산' 선언은 v0.4a-5에서 지원됩니다");
+                // 자산 이름: 통화 — 결정 64. 통화(0) 으로 초기화 (예: 금고: BTC(0)).
+                advance();  // 자산
+                const Token& aname = expect(TokenKind::Identifier, "자산 이름");
+                check_dup(aname.text, aname.pos);
+                expect(TokenKind::Colon, ":");
+                const Token& cur = expect(TokenKind::Identifier, "자산 통화 (BTC/KRW)");
+                auto cur_id = std::make_unique<IdentifierExpr>();
+                cur_id->name = cur.text; cur_id->pos = aname.pos;
+                auto zero = std::make_unique<IntLitExpr>();
+                zero->value = 0; zero->pos = aname.pos;
+                auto call = std::make_unique<CallExpr>();
+                call->callee = Expr{std::move(cur_id)};
+                call->args.push_back(Expr{std::move(zero)});
+                call->pos = aname.pos;
+                record->fields.push_back(RecordField{aname.text, Expr{std::move(call)}});
             } else {
                 const Token& key = expect(TokenKind::Identifier, "계약 항목 이름");
                 check_dup(key.text, key.pos);
@@ -292,6 +366,32 @@ private:
         vd.value = Expr{std::move(record)};
         vd.pos   = pos;
         prog.statements.push_back(Stmt{std::move(vd)});
+    }
+
+    // 통화 이름 [= 페그식]. — v0.4a-5c. 새 통화 선언.
+    // desugar: 변수 이름 = 통화등록("이름").  (= 페그식은 a-5c 에선 파싱만, 무시.)
+    Stmt parse_currency_decl() {
+        Position pos = peek().pos;
+        advance();  // 통화
+        const Token& name = expect(TokenKind::Identifier, "통화 이름");
+        if (peek().kind == TokenKind::Equals) {
+            advance();
+            parse_expression();   // 페그식 — a-5c 에선 무시
+        }
+        expect_period();
+        auto reg = std::make_unique<IdentifierExpr>();
+        reg->name = U"통화등록"; reg->pos = pos;
+        auto lit = std::make_unique<StringLitExpr>();
+        lit->value = name.text; lit->pos = pos;
+        auto call = std::make_unique<CallExpr>();
+        call->callee = Expr{std::move(reg)};
+        call->args.push_back(Expr{std::move(lit)});
+        call->pos = pos;
+        VarDeclStmt vd;
+        vd.name  = name.text;
+        vd.value = Expr{std::move(call)};
+        vd.pos   = pos;
+        return Stmt{std::move(vd)};
     }
 
     std::vector<Stmt> parse_block() {

@@ -185,7 +185,27 @@ struct Runner {
                     }
                     pc += 1; break;
                 }
-                case Opcode::SUB: case Opcode::MUL:
+                case Opcode::SUB: {
+                    // v0.4a-5c: 자산 빼기 (통화 일치·음수 금지) 또는 정수 빼기.
+                    Value b = std::move(stack.back()); stack.pop_back();
+                    Value a = std::move(stack.back()); stack.pop_back();
+                    if (auto aa = as_asset(a)) {
+                        auto ba = as_asset(b);
+                        if (!ba) raise(pos, U"자산에서는 자산만 뺄 수 있습니다");
+                        if (aa->currency != ba->currency) {
+                            raise(pos, U"통화가 다른 자산은 뺄 수 없습니다");
+                        }
+                        std::int64_t d = aa->amount - ba->amount;
+                        if (d < 0) raise(pos, U"자산은 음수가 될 수 없습니다");
+                        stack.push_back(make_asset(aa->currency, d));
+                    } else {
+                        auto ai = as_int(a); auto bi = as_int(b);
+                        if (!ai || !bi) raise(pos, U"- 는 정수 또는 자산에만 적용 가능합니다");
+                        stack.push_back(make_int(*ai - *bi));
+                    }
+                    pc += 1; break;
+                }
+                case Opcode::MUL:
                 case Opcode::DIV: case Opcode::MOD: {
                     Value b = std::move(stack.back()); stack.pop_back();
                     Value a = std::move(stack.back()); stack.pop_back();
@@ -193,7 +213,6 @@ struct Runner {
                     if (!ai || !bi) raise(pos, U"산술 연산은 정수에만 적용 가능합니다");
                     std::int64_t r = 0;
                     switch (op) {
-                        case Opcode::SUB: r = *ai - *bi; break;
                         case Opcode::MUL: r = *ai * *bi; break;
                         case Opcode::DIV:
                             if (*bi == 0) raise(pos, U"0으로 나눌 수 없습니다");

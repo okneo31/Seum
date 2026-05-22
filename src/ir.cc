@@ -214,7 +214,7 @@ struct Lowerer {
             // v0.4a-2 #81: 필드 대입.
             const MemberExpr* me = as_member(asn->target);
             if (!me) raise(asn->pos, U"대입 대상은 레코드/계약 필드여야 합니다");
-            if (asn->op == U"+=") {
+            if (asn->op == U"+=" || asn->op == U"-=") {
                 // 대상 1회 평가 후 DUP — MEMBER_GET·MEMBER_SET 가 공유.
                 Reg rec = lower_expr(me->target);
                 { Instr D; D.op = Op::DUP; D.pos = asn->pos; fn.instrs.push_back(std::move(D)); }
@@ -222,10 +222,11 @@ struct Lowerer {
                 { Instr G; G.op = Op::MEMBER_GET; G.dst = cur; G.src = rec;
                   G.str_val = me->field; G.pos = me->pos; fn.instrs.push_back(std::move(G)); }
                 Reg rhs = lower_expr(asn->value);
-                Reg sum = new_reg();
-                { Instr A; A.op = Op::ADD; A.dst = sum; A.src = cur; A.arg_srcs = {rhs};
+                Reg out = new_reg();
+                { Instr A; A.op = (asn->op == U"+=") ? Op::ADD : Op::SUB;
+                  A.dst = out; A.src = cur; A.arg_srcs = {rhs};
                   A.pos = asn->pos; fn.instrs.push_back(std::move(A)); }
-                { Instr S; S.op = Op::MEMBER_SET; S.src = sum;
+                { Instr S; S.op = Op::MEMBER_SET; S.src = out;
                   S.str_val = me->field; S.pos = asn->pos; fn.instrs.push_back(std::move(S)); }
             } else {
                 lower_expr(me->target);             // push record

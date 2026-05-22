@@ -468,3 +468,44 @@ TEST_CASE("해석기 v0.4a-5: 가져오기(금융) 없이 BTC 사용은 에러",
     Environment env = make_env(cap.sink());
     REQUIRE_THROWS_AS(run(U"보여주기(BTC(1)).", env), SeumError);
 }
+
+// === v0.4a-5b: 계약 자산 + 받아서 (결정 64·65) ===
+
+TEST_CASE("해석기 v0.4a-5b: 다른 통화 예금은 통화 불일치 에러", "[interpreter][v04a5b]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    REQUIRE_THROWS_AS(run(
+        U"가져오기(금융).\n"
+        U"계약 은행 { 자산 금고: BTC  함수 예금(돈: BTC) 받아서 -> 금고 {} }\n"
+        U"은행.예금(KRW(1)).", env), SeumError);
+}
+
+// === v0.4a-5c: 통화 발행 + 금액() + -= ===
+
+TEST_CASE("해석기 v0.4a-5c: 새 통화 선언·생성", "[interpreter][v04a5c]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    run(U"가져오기(금융). 통화 마실. 보여주기(마실(50000)).", env);
+    REQUIRE(cap.buffer.find(U"마실(50000)") != std::u32string::npos);
+}
+
+TEST_CASE("해석기 v0.4a-5c: 금액() 자산 금액 추출", "[interpreter][v04a5c]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    run(U"가져오기(금융). 보여주기(금액(BTC(777))).", env);
+    REQUIRE(cap.buffer.find(U"777") != std::u32string::npos);
+}
+
+TEST_CASE("해석기 v0.4a-5c: 자산 -= 빼기", "[interpreter][v04a5c]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    run(U"가져오기(금융). 변수 w = (돈: BTC(100)). w.돈 -= BTC(30). 보여주기(w.돈).", env);
+    REQUIRE(cap.buffer.find(U"BTC(70)") != std::u32string::npos);
+}
+
+TEST_CASE("해석기 v0.4a-5c: 잔액보다 많이 빼면 음수 금지 에러", "[interpreter][v04a5c]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    REQUIRE_THROWS_AS(
+        run(U"가져오기(금융). 변수 w = (돈: BTC(100)). w.돈 -= BTC(200).", env), SeumError);
+}

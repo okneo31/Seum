@@ -987,3 +987,110 @@ TEST_CASE(".담음 빌드 경로: 자산 생성·누적", "[integration][v04a5][
         U"가져오기(금융). 변수 w = (돈: BTC(7)). w.돈 += BTC(3). 보여주기(w.돈).");
     REQUIRE(out.find(U"BTC(10)") != std::u32string::npos);
 }
+
+// === v0.4a-5b: 계약·자산·받아서 양 경로 의무 (#32, 결정 64·65) ===
+
+TEST_CASE("양경로 v0.4a-5b: 원본 금융 예시 — 계약·자산·받아서", "[integration][both][v04a5b]") {
+    auto b = run_both(
+        U"가져오기(금융).\n"
+        U"계약 나의은행 {\n"
+        U"    자산 금고: BTC\n"
+        U"    함수 예금(받은돈: BTC) 받아서 -> 금고 {}\n"
+        U"}\n"
+        U"나의은행.예금(BTC(50000)).\n"
+        U"보여주기(나의은행.금고).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"BTC(50000)") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-5b: 여러 번 예금 누적", "[integration][both][v04a5b]") {
+    auto b = run_both(
+        U"가져오기(금융).\n"
+        U"계약 은행 { 자산 금고: BTC  함수 예금(돈: BTC) 받아서 -> 금고 {} }\n"
+        U"은행.예금(BTC(100)). 은행.예금(BTC(200)). 은행.예금(BTC(50)).\n"
+        U"보여주기(은행.금고).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"BTC(350)") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-5b: 받아서 누적이 본문보다 먼저", "[integration][both][v04a5b]") {
+    // 본문에서 금고 출력 — 누적 먼저면 새 잔액이 보임 (Grill Q3)
+    auto b = run_both(
+        U"가져오기(금융).\n"
+        U"계약 은행 {\n"
+        U"  자산 금고: BTC\n"
+        U"  함수 예금(돈: BTC) 받아서 -> 금고 { 보여주기(은행.금고). }\n"
+        U"}\n"
+        U"은행.예금(BTC(70)).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"BTC(70)") != std::u32string::npos);
+}
+
+TEST_CASE(".담음 빌드 경로: 계약·자산·받아서", "[integration][v04a5b][acc-dameum]") {
+    auto out = run_via_dameum(
+        U"가져오기(금융). 계약 은행 { 자산 금고: BTC  함수 예금(돈: BTC) 받아서 -> 금고 {} }"
+        U" 은행.예금(BTC(9)). 보여주기(은행.금고).");
+    REQUIRE(out.find(U"BTC(9)") != std::u32string::npos);
+}
+
+// === v0.4a-5c: 통화 발행 + 금액() + -= 양 경로 (#32) ===
+
+TEST_CASE("양경로 v0.4a-5c: 새 통화 선언·생성·금액 추출", "[integration][both][v04a5c]") {
+    auto b = run_both(
+        U"가져오기(금융). 통화 마실. "
+        U"보여주기(마실(120000)). 보여주기(금액(마실(120000))).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"마실(120000)") != std::u32string::npos);
+    REQUIRE(b.tree.find(U"120000") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-5c: 자산 += 와 -= 누적·차감", "[integration][both][v04a5c]") {
+    auto b = run_both(
+        U"가져오기(금융). 변수 지갑 = (돈: BTC(1000)). "
+        U"지갑.돈 += BTC(500). 지갑.돈 -= BTC(200). 보여주기(지갑.돈).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"BTC(1300)") != std::u32string::npos);
+}
+
+// === v0.4a-5d: 대출 = 신용 창조 (R = T + L) — 양 경로 ===
+
+TEST_CASE("양경로 v0.4a-5d: 대출 = 신용 창조 (R = T + L)", "[integration][both][v04a5d]") {
+    auto b = run_both(
+        U"가져오기(금융). 통화 마실.\n"
+        U"계약 은행 {\n"
+        U"  자산 전체계좌합: 마실\n"
+        U"  함수 대출(원금: 마실) -> 없음 { 은행.전체계좌합 += 원금. }\n"
+        U"}\n"
+        U"은행.대출(마실(1000000)). 은행.대출(마실(500000)).\n"
+        U"보여주기(은행.전체계좌합).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"마실(1500000)") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-5d: 대출(신용 창조) + 상환(신용 소멸)", "[integration][both][v04a5d]") {
+    auto b = run_both(
+        U"가져오기(금융). 통화 마실.\n"
+        U"계약 은행 {\n"
+        U"  자산 잔액: 마실\n"
+        U"  함수 대출(원금: 마실) -> 없음 { 은행.잔액 += 원금. }\n"
+        U"  함수 상환(갚은돈: 마실) -> 없음 { 은행.잔액 -= 갚은돈. }\n"
+        U"}\n"
+        U"은행.대출(마실(1000000)). 은행.상환(마실(300000)).\n"
+        U"보여주기(은행.잔액).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"마실(700000)") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-5d: 복식부기 — 예금과 대출채권 균형", "[integration][both][v04a5d]") {
+    auto b = run_both(
+        U"가져오기(금융). 통화 마실.\n"
+        U"계약 은행 {\n"
+        U"  자산 예금: 마실\n"
+        U"  자산 대출채권: 마실\n"
+        U"  함수 대출(원금: 마실) -> 없음 { 은행.예금 += 원금. 은행.대출채권 += 원금. }\n"
+        U"}\n"
+        U"은행.대출(마실(800000)).\n"
+        U"보여주기(은행.예금). 보여주기(은행.대출채권).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"마실(800000)") != std::u32string::npos);
+}
