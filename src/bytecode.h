@@ -36,6 +36,8 @@ enum class Opcode : std::uint8_t {
     MUL           = 0x73,
     DIV           = 0x74,
     MOD           = 0x75,
+    MAKE_RECORD   = 0x80,   // v0.4a-1 2b: operand 1B = 필드 수
+    MEMBER_GET    = 0x81,   // v0.4a-1 2b: operand 4B = str_pool 인덱스
     HALT          = 0xFF,
 };
 

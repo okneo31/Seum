@@ -107,12 +107,29 @@ struct Lowerer {
             // v0.3e 결정 #58: 위험 { 식 } = inner 그대로 lower. marker.
             return lower_expr(us->inner);
         }
-        if (is_record_lit(e) || is_member(e)) {
-            // v0.4a-1: 레코드·멤버 접근은 트리 경로 먼저 (step 2a).
-            // --vm 경로 lowering 은 v0.4a-2b 에서. 그 전엔 명확한 한국어 에러.
-            raise(position_of(e),
-                  U"레코드·멤버 접근은 아직 --vm 경로에서 미지원입니다 "
-                  U"(v0.4a-2b 예정 — 지금은 --tree 로 실행하세요)");
+        if (auto* re = as_record_lit(e)) {
+            // v0.4a-1 2b #69: 레코드 리터럴 → 키·값 push 후 MAKE_RECORD.
+            for (const RecordField& f : re->fields) {
+                Instr K; K.op = Op::CONST_STR; K.dst = new_reg();
+                K.str_val = f.key; K.pos = re->pos;
+                fn.instrs.push_back(std::move(K));
+                lower_expr(f.value);
+            }
+            Reg r = new_reg();
+            Instr I; I.op = Op::MAKE_RECORD; I.dst = r;
+            I.int_val = static_cast<std::int64_t>(re->fields.size());
+            I.pos = re->pos;
+            fn.instrs.push_back(std::move(I));
+            return r;
+        }
+        if (auto* me = as_member(e)) {
+            // v0.4a-1 2b #79: 멤버 접근 → 대상 push 후 MEMBER_GET.
+            lower_expr(me->target);
+            Reg r = new_reg();
+            Instr I; I.op = Op::MEMBER_GET; I.dst = r;
+            I.str_val = me->field; I.pos = me->pos;
+            fn.instrs.push_back(std::move(I));
+            return r;
         }
         return new_reg();
     }
@@ -307,6 +324,8 @@ const char32_t* op_name(Op op) {
         case Op::JMP:          return U"뛰기";
         case Op::JFZ:          return U"거짓이면뛰기";
         case Op::RET:          return U"돌려주기";
+        case Op::MAKE_RECORD:  return U"레코드만들기";
+        case Op::MEMBER_GET:   return U"멤버가져오기";
     }
     return U"???";
 }
@@ -416,6 +435,12 @@ std::u32string disassemble(const Function& fn) {
                 out += op_name(I.op); out += U" "; out += label_str(I.target); break;
             case Op::RET:
                 out += op_name(I.op); break;
+            case Op::MAKE_RECORD:
+                out += reg_str(I.dst); out += U" = "; out += op_name(I.op);
+                out += U" "; out += int_str(I.int_val); break;
+            case Op::MEMBER_GET:
+                out += reg_str(I.dst); out += U" = "; out += op_name(I.op);
+                out += U" "; out += quote(I.str_val); break;
         }
         out += U"\n";
     }

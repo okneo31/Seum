@@ -29,6 +29,8 @@ enum class Op : std::uint8_t {
     JMP,
     JFZ,
     RET,                 // v0.2e: 현재 프레임 종료, top 을 호출자에게 반환
+    MAKE_RECORD,         // v0.4a-1 2b: int_val = 필드 수. 스택 키·값 2N개 → 레코드
+    MEMBER_GET,          // v0.4a-1 2b: str_val = 필드 이름. 스택 top 레코드의 필드
 };
 
 struct Instr {

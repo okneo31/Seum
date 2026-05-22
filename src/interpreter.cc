@@ -142,6 +142,10 @@ Value eval_expr(const Expr& e, Environment& env) {
     }
     if (auto* re = as_record_lit(e)) {
         // v0.4a-1 #69: 레코드 리터럴 → RecordValue (필드 순서 보존).
+        // 255 한도 — VM(bytecode 1B 피연산자)과 동일 (양 경로 의무 #32).
+        if (re->fields.size() > 255) {
+            raise(re->pos, U"레코드 필드는 255개를 넘을 수 없습니다");
+        }
         auto rec = std::make_shared<RecordValue>();
         rec->fields.reserve(re->fields.size());
         for (const RecordField& f : re->fields) {

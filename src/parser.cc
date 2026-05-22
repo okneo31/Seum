@@ -375,6 +375,14 @@ private:
         rec->pos = pos;
         while (true) {
             const Token& key = expect(TokenKind::Identifier, "레코드 키 이름");
+            // 중복 키 거부 — 키는 필드를 식별하므로 유일해야 함 (결정 #69).
+            for (const RecordField& f : rec->fields) {
+                if (f.key == key.text) {
+                    std::u32string msg = U"레코드에 중복된 키: ";
+                    msg += key.text;
+                    raise(key.pos, msg);
+                }
+            }
             expect(TokenKind::Colon, ":");
             Expr val = parse_expression();
             rec->fields.push_back(RecordField{key.text, std::move(val)});

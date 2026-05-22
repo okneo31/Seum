@@ -134,3 +134,54 @@ TEST_CASE("VM v0.2b: 단항 NOT", "[vm][v02b]") {
     compile_and_run(U"보여주기(!거짓).", env);
     REQUIRE(captured.find(U"참") != std::u32string::npos);
 }
+
+// === v0.4a-1 2b: 레코드·멤버 접근 — VM 경로 (결정 69·79·92) ===
+
+TEST_CASE("VM v0.4a-1: 레코드 멤버 읽기", "[vm][v04a]") {
+    std::u32string captured;
+    auto sink = [&captured](const std::u32string& s) { captured += s; };
+    Environment env;
+    modules::register_builtin(env, sink);
+    compile_and_run(U"변수 위치 = (ㄱ: 10, ㅅ: 20). 보여주기(위치.ㄱ). 보여주기(위치.ㅅ).", env);
+    REQUIRE(captured.find(U"10") != std::u32string::npos);
+    REQUIRE(captured.find(U"20") != std::u32string::npos);
+}
+
+TEST_CASE("VM v0.4a-1: 중첩 레코드 멤버 체이닝", "[vm][v04a]") {
+    std::u32string captured;
+    auto sink = [&captured](const std::u32string& s) { captured += s; };
+    Environment env;
+    modules::register_builtin(env, sink);
+    compile_and_run(U"변수 용사 = (위치: (ㄱ: 10, ㅅ: 20)). 보여주기(용사.위치.ㅅ).", env);
+    REQUIRE(captured.find(U"20") != std::u32string::npos);
+}
+
+TEST_CASE("VM v0.4a-1: 레코드 출력 형태", "[vm][v04a]") {
+    std::u32string captured;
+    auto sink = [&captured](const std::u32string& s) { captured += s; };
+    Environment env;
+    modules::register_builtin(env, sink);
+    compile_and_run(U"보여주기((ㄱ: 1, ㅅ: 2)).", env);
+    REQUIRE(captured.find(U"(ㄱ: 1, ㅅ: 2)") != std::u32string::npos);
+}
+
+TEST_CASE("VM v0.4a-1: 없는 멤버 접근은 한국어 에러", "[vm][v04a]") {
+    Environment env;
+    modules::register_builtin(env);
+    REQUIRE_THROWS_AS(compile_and_run(U"변수 r = (ㄱ: 1). 보여주기(r.ㅎ).", env), SeumError);
+}
+
+TEST_CASE("VM v0.4a-1: 단일 필드 레코드", "[vm][v04a]") {
+    std::u32string captured;
+    auto sink = [&captured](const std::u32string& s) { captured += s; };
+    Environment env;
+    modules::register_builtin(env, sink);
+    compile_and_run(U"변수 r = (점수: 100). 보여주기(r.점수).", env);
+    REQUIRE(captured.find(U"100") != std::u32string::npos);
+}
+
+TEST_CASE("VM v0.4a-1: 비-레코드 멤버 접근은 한국어 에러", "[vm][v04a]") {
+    Environment env;
+    modules::register_builtin(env);
+    REQUIRE_THROWS_AS(compile_and_run(U"변수 x = 5. 보여주기(x.ㄱ).", env), SeumError);
+}

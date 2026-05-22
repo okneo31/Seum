@@ -663,3 +663,111 @@ TEST_CASE("Acceptance 14: 한글+ASCII 혼합 round-trip", "[integration][v03c]"
     auto out = dameum::read(path);
     REQUIRE(jamo::decompress(out.chunks[0].data) == orig);
 }
+
+// === v0.4a-1 2b: 레코드·멤버 접근 양 경로 의무 (#32, 결정 69·79·93) ===
+
+TEST_CASE("양경로 v0.4a-1: 레코드 멤버 읽기", "[integration][both][v04a]") {
+    auto b = run_both(U"변수 위치 = (ㄱ: 10, ㅅ: 20). 보여주기(위치.ㄱ). 보여주기(위치.ㅅ).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"10") != std::u32string::npos);
+    REQUIRE(b.tree.find(U"20") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-1: 중첩 레코드 체이닝", "[integration][both][v04a]") {
+    auto b = run_both(U"변수 용사 = (위치: (ㄱ: 10, ㅅ: 20)). 보여주기(용사.위치.ㄱ).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"10") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-1: 레코드 출력 형태 동일", "[integration][both][v04a]") {
+    auto b = run_both(U"보여주기((ㄱ: 1, ㅅ: 2)).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"(ㄱ: 1, ㅅ: 2)") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-1: 레코드 필드 값으로 식 사용", "[integration][both][v04a]") {
+    auto b = run_both(U"변수 r = (합: 1 + 2 * 3). 보여주기(r.합).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"7") != std::u32string::npos);
+}
+
+TEST_CASE(".담음 빌드 경로: 레코드 멤버 접근", "[integration][v04a][acc-dameum]") {
+    // 레코드/멤버가 bytecode 직렬화 → .담음 → 역직렬화 → 실행을 통과하는지
+    auto out = run_via_dameum(U"변수 위치 = (ㄱ: 7, ㅅ: 8). 보여주기(위치.ㄱ).");
+    REQUIRE(out.find(U"7") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-1: 레코드를 함수 인자로 전달", "[integration][both][v04a]") {
+    auto b = run_both(
+        U"함수 가로(점) -> 결과 { 돌려주기 점.ㄱ. }\n"
+        U"보여주기(가로((ㄱ: 5, ㅅ: 9))).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"5") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-1: 레코드 필드에 문자열·불리언", "[integration][both][v04a]") {
+    auto b = run_both(
+        U"변수 용사 = (이름: \"용사\", 살아있음: 참).\n"
+        U"보여주기(용사.이름). 보여주기(용사.살아있음).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"용사") != std::u32string::npos);
+    REQUIRE(b.tree.find(U"참")   != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-1: 3중 중첩 레코드 체이닝", "[integration][both][v04a]") {
+    auto b = run_both(U"변수 깊이 = (ㄱ: (ㅅ: (ㄷ: 42))). 보여주기(깊이.ㄱ.ㅅ.ㄷ).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"42") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-1: 레코드 == 비교는 거짓 (결정 93d)", "[integration][both][v04a]") {
+    auto b = run_both(U"보여주기((ㄱ: 1) == (ㄱ: 1)).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"거짓") != std::u32string::npos);
+}
+
+TEST_CASE("양경로 v0.4a-1: 다른 레코드의 멤버를 필드 값으로", "[integration][both][v04a]") {
+    auto b = run_both(U"변수 가 = (x: 7). 변수 나 = (y: 가.x). 보여주기(나.y).");
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"7") != std::u32string::npos);
+}
+
+namespace {
+// N개 필드 레코드 소스 생성 — 키 ㅋ0..ㅋ(N-1), 값 0..N-1 (모두 distinct).
+std::u32string big_record_src(int n) {
+    std::u32string s = U"변수 큰것 = (";
+    for (int i = 0; i < n; ++i) {
+        if (i) s += U", ";
+        std::string num = std::to_string(i);
+        s += U"ㅋ";
+        for (char c : num) s += static_cast<char32_t>(c);
+        s += U": ";
+        for (char c : num) s += static_cast<char32_t>(c);
+    }
+    s += U").";
+    return s;
+}
+}  // namespace
+
+TEST_CASE("v0.4a-1 정리: 256-필드 레코드는 양 경로 모두 에러 (#32)", "[integration][v04a]") {
+    auto src = big_record_src(256);
+    {   // 트리 경로
+        Environment env;
+        modules::register_builtin(env);
+        REQUIRE_THROWS_AS(evaluate(parse(tokenize(src)), env), SeumError);
+    }
+    {   // VM 경로 (bytecode::compile 단계에서 거부)
+        Environment env;
+        modules::register_builtin(env);
+        auto prog = parse(tokenize(src));
+        REQUIRE_THROWS_AS(vm::run(bytecode::compile(ir::lower(prog)), env), SeumError);
+    }
+}
+
+TEST_CASE("v0.4a-1 정리: 255-필드 레코드는 양 경로 모두 정상", "[integration][both][v04a]") {
+    auto src = big_record_src(255);
+    src += U" 보여주기(큰것.ㅋ0).";
+    auto b = run_both(src);
+    REQUIRE(b.tree == b.vm_);
+    REQUIRE(b.tree.find(U"0") != std::u32string::npos);
+}

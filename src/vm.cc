@@ -234,6 +234,41 @@ struct Runner {
                     else     pc += 5;
                     break;
                 }
+                case Opcode::MAKE_RECORD: {
+                    // v0.4a-1 2b #69: 스택 키·값 2N개 → RecordValue.
+                    // 스택 bottom→top = key0,val0,key1,val1,…
+                    std::uint8_t n = chunk.bytes[pc + 1];
+                    if (stack.size() < static_cast<std::size_t>(n) * 2) {
+                        raise(pos, U"VM 내부 오류: 레코드 스택 부족");
+                    }
+                    auto rec = std::make_shared<RecordValue>();
+                    rec->fields.resize(n);
+                    for (int i = static_cast<int>(n) - 1; i >= 0; --i) {
+                        Value val = std::move(stack.back()); stack.pop_back();
+                        Value key = std::move(stack.back()); stack.pop_back();
+                        auto* ks = as_string(key);
+                        if (!ks) raise(pos, U"VM 내부 오류: 레코드 키가 문자열이 아님");
+                        rec->fields[i] = { *ks, std::move(val) };
+                    }
+                    stack.push_back(Value{rec});
+                    pc += 2; break;
+                }
+                case Opcode::MEMBER_GET: {
+                    // v0.4a-1 2b #79: 스택 top 레코드의 필드 조회.
+                    std::uint32_t idx = read_u32_le(&chunk.bytes[pc + 1]);
+                    const std::u32string& field = chunk.str_pool[idx];
+                    if (stack.empty()) raise(pos, U"VM 내부 오류: 멤버 접근 빈 스택");
+                    Value target = std::move(stack.back()); stack.pop_back();
+                    RecordValue* rec = as_record(target);
+                    if (!rec) raise(pos, U"멤버 접근은 레코드에만 가능합니다");
+                    const Value* fv = rec->get(field);
+                    if (!fv) {
+                        std::u32string msg = U"레코드에 없는 멤버: "; msg += field;
+                        raise(pos, msg);
+                    }
+                    stack.push_back(*fv);
+                    pc += 5; break;
+                }
                 case Opcode::HALT:
                     return make_none();
             }

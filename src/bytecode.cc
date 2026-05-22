@@ -1,4 +1,5 @@
 #include "bytecode.h"
+#include "error_reporter.h"
 #include "ir.h"
 #include "utf8.h"
 
@@ -45,6 +46,8 @@ const Row TABLE[] = {
     { Opcode::MUL,          U"곱하기",       0 },
     { Opcode::DIV,          U"나누기",       0 },
     { Opcode::MOD,          U"나머지",       0 },
+    { Opcode::MAKE_RECORD,  U"레코드만들기", 1 },
+    { Opcode::MEMBER_GET,   U"멤버가져오기", 4 },
     { Opcode::HALT,         U"종료",         0 },
 };
 
@@ -207,6 +210,18 @@ struct ChunkCompiler {
                 break;
             }
             case O::RET: emit_op(Opcode::RET, I.pos); break;
+            case O::MAKE_RECORD:
+                // 255 한도 — 트리 경로(interpreter)와 동일 에러 (양 경로 의무 #32).
+                if (I.int_val < 0 || I.int_val > 255) {
+                    raise(I.pos, U"레코드 필드는 255개를 넘을 수 없습니다");
+                }
+                emit_op(Opcode::MAKE_RECORD, I.pos);
+                emit_u8(static_cast<std::uint8_t>(I.int_val));
+                break;
+            case O::MEMBER_GET:
+                emit_op(Opcode::MEMBER_GET, I.pos);
+                emit_u32(intern_str(I.str_val));
+                break;
         }
     }
 };
@@ -262,6 +277,7 @@ std::u32string disassemble(const Chunk& chunk) {
                 case Opcode::IMPORT:       out += quote_string(chunk.name_pool[arg]); break;
                 case Opcode::JMP:
                 case Opcode::JFZ:          out += U"-> "; out += hex4(arg); break;
+                case Opcode::MEMBER_GET:   out += quote_string(chunk.str_pool[arg]); break;
                 default:                   out += int_to_u32(static_cast<std::int64_t>(arg)); break;
             }
         } else if (row->operand_bytes == 1) {

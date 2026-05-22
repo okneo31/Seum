@@ -357,3 +357,11 @@ TEST_CASE("해석기 v0.4a-1: 레코드 필드 값으로 식 사용", "[interpre
     run(U"변수 r = (합: 1 + 2 * 3). 보여주기(r.합).", env);
     REQUIRE(cap.buffer.find(U"7") != std::u32string::npos);
 }
+
+TEST_CASE("해석기 v0.4a-1: 함수가 반환한 레코드에 멤버 접근", "[interpreter][v04a]") {
+    Captured cap;
+    Environment env = make_env(cap.sink());
+    run(U"함수 점만들기() -> 결과 { 돌려주기 (ㄱ: 3, ㅅ: 4). }\n"
+        U"보여주기(점만들기().ㄱ).", env);
+    REQUIRE(cap.buffer.find(U"3") != std::u32string::npos);
+}

@@ -95,3 +95,7 @@ TEST_CASE("파서 v0.4a-1: 괄호식은 레코드가 아님", "[parser][v04a]") 
     REQUIRE(call != nullptr);
     REQUIRE(is_binary(call->args[0]));   // 곱셈식
 }
+
+TEST_CASE("파서 v0.4a-1: 레코드 중복 키는 오류 (점검 정리)", "[parser][v04a]") {
+    REQUIRE_THROWS(parse_source(U"변수 r = (ㄱ: 1, ㄱ: 2)."));
+}
